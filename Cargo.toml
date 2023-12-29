@@ -1,0 +1,16 @@
+[package]
+name = "ark"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ark"
+harness = false
+
+[workspace]
+members = [
+    "dtb",
+]
+
+[dependencies]
+ark-dtb = { path = "dtb" }
