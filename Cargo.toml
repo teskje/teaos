@@ -1,16 +1,8 @@
 [package]
-name = "ark"
+name = "teaos"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "ark"
+name = "teaos"
 harness = false
-
-[workspace]
-members = [
-    "dtb",
-]
-
-[dependencies]
-ark-dtb = { path = "dtb" }

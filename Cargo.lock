@@ -3,12 +3,5 @@
 version = 3
 
 [[package]]
-name = "ark"
-version = "0.1.0"
-dependencies = [
- "ark-dtb",
-]
-
-[[package]]
-name = "ark-dtb"
+name = "teaos"
 version = "0.1.0"

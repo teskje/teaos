@@ -1,5 +1,6 @@
 [build]
-target = "aarch64-unknown-none"
+target = "aarch64-unknown-uefi"
+rustflags = ["-C", "link-args=/debug:dwarf"]
 
-[target.aarch64-unknown-none]
-runner = "qemu-system-aarch64 -machine virt -cpu neoverse-n1 -smp 1 -serial stdio -kernel"
+[target.aarch64-unknown-uefi]
+runner = "qemu/run.sh"
