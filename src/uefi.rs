@@ -15,8 +15,11 @@ unsafe extern "efiapi" fn efi_main(
     let con_out = (*system_table).con_out;
 
     log::set_uefi(ConOut(con_out));
+    println!("entered UEFI load");
 
-    println!("commencing UEFI load");
+    println!("retrieving image base");
+    let image_base = get_image_base(bs, image_handle);
+    println!("  image_base={image_base:#?}");
 
     println!("retrieving ACPI RSDP pointer");
     let rsdp_ptr = find_rsdp_ptr(system_table);
@@ -32,6 +35,21 @@ unsafe extern "efiapi" fn efi_main(
     exit_boot_services(bs, image_handle, memory_map.map_key);
 
     kernel_main(rsdp_ptr);
+}
+
+unsafe fn get_image_base(bs: *mut efi::BOOT_SERVICES, image_handle: efi::HANDLE) -> *mut c_void {
+    let mut loaded_image = ptr::null_mut();
+    let handle_protocol = (*bs).handle_protocol;
+    let status = handle_protocol(
+        image_handle,
+        &efi::LOADED_IMAGE_PROTOCOL_GUID,
+        &mut loaded_image,
+    );
+    assert_eq!(status, efi::STATUS::SUCCESS);
+
+    let loaded_image = loaded_image as *mut efi::LOADED_IMAGE_PROTOCOL;
+    assert_eq!((*loaded_image).revision, 0x1000);
+    (*loaded_image).image_base
 }
 
 unsafe fn find_rsdp_ptr(system_table: *mut efi::SYSTEM_TABLE) -> *mut c_void {
@@ -241,7 +259,7 @@ mod efi {
         pub install_protocol_interface: *mut c_void,
         pub reinstall_protocol_interface: *mut c_void,
         pub uninstall_protocol_interface: *mut c_void,
-        pub handle_protocol: *mut c_void,
+        pub handle_protocol: HANDLE_PROTOCOL,
         pub reserved: *mut c_void,
         pub register_protocol_notify: *mut c_void,
         pub locate_handle: *mut c_void,
@@ -315,8 +333,39 @@ mod efi {
     /// [UEFI] 7.2.4 EFI_BOOT_SERVICES.AllocatePool()
     pub type ALLOCATE_POOL = extern "efiapi" fn(MEMORY_TYPE, usize, *mut *mut c_void) -> STATUS;
 
+    /// [UEFI] 7.3.7 EFI_BOOT_SERVICES.HandleProtocol()
+    pub type HANDLE_PROTOCOL = extern "efiapi" fn(
+        handle: HANDLE,
+        protocol: *const GUID,
+        interface: *mut *mut c_void,
+    ) -> STATUS;
+
     /// [UEFI] 7.4.6 EFI_BOOT_SERVICES.ExitBootServices()
     pub type EXIT_BOOT_SERVICES = extern "efiapi" fn(HANDLE, usize) -> STATUS;
+
+    /// [UEFI] 9.1.1 EFI_LOADED_IMAGE_PROTOCOL
+    pub const LOADED_IMAGE_PROTOCOL_GUID: GUID = [
+        0xA1, 0x31, 0x1B, 0x5B, 0x62, 0x95, 0xd2, 0x11, 0x8E, 0x3F, 0x00, 0xA0, 0xC9, 0x69, 0x72,
+        0x3B,
+    ];
+
+    /// [UEFI] 9.1.1 EFI_LOADED_IMAGE_PROTOCOL
+    #[repr(C)]
+    pub struct LOADED_IMAGE_PROTOCOL {
+        pub revision: u32,
+        pub parent_handle: HANDLE,
+        pub system_table: *mut SYSTEM_TABLE,
+        pub device_handle: HANDLE,
+        pub file_path: *mut c_void,
+        pub reserved: *mut c_void,
+        pub load_options_size: u32,
+        pub load_options: *mut c_void,
+        pub image_base: *mut c_void,
+        pub image_size: u64,
+        pub image_code_type: MEMORY_TYPE,
+        pub image_data_type: MEMORY_TYPE,
+        pub unload: *mut c_void,
+    }
 
     /// [UEFI] 12.4.1 EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL
     #[repr(C)]
