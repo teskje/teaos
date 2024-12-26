@@ -11,7 +11,9 @@ use core::panic::PanicInfo;
 use crate::log::println;
 
 fn kernel_main(rsdp_ptr: *mut c_void) -> ! {
-    loop {}
+    loop {
+        cpu::wfe();
+    }
 }
 
 #[panic_handler]
