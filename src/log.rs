@@ -1,5 +1,6 @@
 use core::{fmt, ptr};
 
+use crate::uart::Uart;
 use crate::uefi;
 
 static mut LOGGER: Logger = Logger::None;
@@ -7,6 +8,7 @@ static mut LOGGER: Logger = Logger::None;
 enum Logger {
     None,
     Uefi(uefi::ConOut),
+    Uart(Uart),
 }
 
 impl fmt::Write for Logger {
@@ -14,7 +16,16 @@ impl fmt::Write for Logger {
         match self {
             Self::None => Ok(()),
             Self::Uefi(out) => out.write_str(s),
+            Self::Uart(uart) => uart.write_str(s),
         }
+    }
+}
+
+pub fn set_none() {
+    // SAFETY: single-threaded access and only short-lived references
+    unsafe {
+        let logger = &mut *ptr::addr_of_mut!(LOGGER);
+        *logger = Logger::None;
     }
 }
 
@@ -23,6 +34,14 @@ pub fn set_uefi(out: uefi::ConOut) {
     unsafe {
         let logger = &mut *ptr::addr_of_mut!(LOGGER);
         *logger = Logger::Uefi(out);
+    }
+}
+
+pub fn set_uart(uart: Uart) {
+    // SAFETY: single-threaded access and only short-lived references
+    unsafe {
+        let logger = &mut *ptr::addr_of_mut!(LOGGER);
+        *logger = Logger::Uart(uart);
     }
 }
 
