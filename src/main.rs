@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+mod crc32;
 mod cpu;
 mod log;
 mod uart;

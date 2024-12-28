@@ -7,7 +7,7 @@ static mut LOGGER: Logger = Logger::None;
 
 enum Logger {
     None,
-    Uefi(uefi::ConOut),
+    Uefi(uefi::ConsoleOut),
     Uart(Uart),
 }
 
@@ -29,7 +29,7 @@ pub fn set_none() {
     }
 }
 
-pub fn set_uefi(out: uefi::ConOut) {
+pub fn set_uefi(out: uefi::ConsoleOut) {
     // SAFETY: single-threaded access and only short-lived references
     unsafe {
         let logger = &mut *ptr::addr_of_mut!(LOGGER);
