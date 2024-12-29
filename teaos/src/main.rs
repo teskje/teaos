@@ -1,14 +1,15 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
 
-mod crc32;
 mod cpu;
+mod crc32;
 mod log;
+#[cfg(not(test))]
+mod panic;
 mod uart;
 mod uefi;
 
 use core::ffi::c_void;
-use core::panic::PanicInfo;
 
 use crate::log::println;
 use crate::uart::Uart;
@@ -27,8 +28,5 @@ fn kernel_main(boot_config: BootConfig) -> ! {
     }
 }
 
-#[panic_handler]
-fn panic(panic: &PanicInfo<'_>) -> ! {
-    println!("PANIC: {panic:?}");
-    loop {}
-}
+#[cfg(test)]
+fn main() {}
