@@ -1,8 +1,6 @@
-[package]
-name = "teaos"
-version = "0.1.0"
-edition = "2021"
-
-[[bin]]
-name = "teaos"
-harness = false
+[workspace]
+members = [
+    "teaos",
+    "xtask",
+]
+resolver = "2"

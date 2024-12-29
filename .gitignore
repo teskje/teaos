@@ -1,4 +1,5 @@
-/target/
+target/
+
 /aws/root.img
 /aws/esp/
 /qemu/esp/

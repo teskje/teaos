@@ -1,6 +1,2 @@
-[build]
-target = "aarch64-unknown-uefi"
-rustflags = ["-C", "link-args=/debug:dwarf"]
-
-[target.aarch64-unknown-uefi]
-runner = "qemu/run.sh"
+[alias]
+xtask = "run --package xtask --"
