@@ -27,6 +27,3 @@ fn kernel_main(boot_config: BootConfig) -> ! {
         cpu::wfe();
     }
 }
-
-#[cfg(test)]
-fn main() {}

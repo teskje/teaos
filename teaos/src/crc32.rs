@@ -49,3 +49,32 @@ const CRC32_TABLE: [u32; 256] = [
     0xBDBDF21C, 0xCABAC28A, 0x53B39330, 0x24B4A3A6, 0xBAD03605, 0xCDD70693, 0x54DE5729, 0x23D967BF,
     0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94, 0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D,
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crc32() {
+        const TEST_CASES: &[(&[u8], u32)] = &[
+            (b"", 0x00000000),
+            (b"a", 0xe8b7be43),
+            (b"abc", 0x352441c2),
+            (b"message digest", 0x20159d7f),
+            (b"123456789", 0xcbf43926),
+            (b"hello world", 0xd4a1185),
+        ];
+
+        fn compute(data: &[u8]) -> u32 {
+            let mut crc = Crc32::new();
+            for byte in data {
+                crc.update(*byte);
+            }
+            crc.finish()
+        }
+
+        for (input, expected) in TEST_CASES {
+            assert_eq!(compute(input), *expected, "input={input:?}");
+        }
+    }
+}
