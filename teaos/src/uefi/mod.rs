@@ -114,7 +114,7 @@ unsafe fn find_uart(rsdp: *mut acpi::RSDP) -> Uart {
     let spcr = spcr.expect("SPCR table present");
     assert_eq!((*spcr).header.revision, 2);
 
-    let uart_base = acpi_gas_address((*spcr).base_address);
+    let uart_base = (*spcr).base_address.address;
     let uart_base = uart_base as *mut c_void;
 
     match (*spcr).interface_type {
@@ -124,19 +124,21 @@ unsafe fn find_uart(rsdp: *mut acpi::RSDP) -> Uart {
     }
 }
 
-fn acpi_gas_address(gas: acpi::GAS) -> u64 {
-    let address_bytes = gas[4..].try_into().unwrap();
-    u64::from_le_bytes(address_bytes)
-}
-
 /// ACPI type definitions.
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, dead_code)]
 mod acpi {
     /// [ACPI] 5.2.3.2 Generic Address Structure
-    pub type GAS = [u8; 12];
+    #[repr(packed)]
+    pub struct GAS {
+        pub address_space_id: u8,
+        pub register_bit_width: u8,
+        pub register_bit_offset: u8,
+        pub access_size: u8,
+        pub address: u64,
+    }
 
     /// [ACPI] 5.2.5.3 Root System Description Pointer (RSDP) Structure
-    #[repr(C)]
+    #[repr(packed)]
     pub struct RSDP {
         pub signature: [u8; 8],
         pub checksum: u8,
@@ -150,7 +152,7 @@ mod acpi {
     }
 
     /// [ACPI] 5.2.6 System Description Table Header
-    #[repr(C)]
+    #[repr(packed)]
     pub struct DESCRIPTION_HEADER {
         pub signature: [u8; 4],
         pub length: u32,
@@ -164,17 +166,14 @@ mod acpi {
     }
 
     /// [APIC] 5.2.8 Extended System Description Table (XSDT)
-    #[repr(C)]
+    #[repr(packed)]
     pub struct XSDT {
         pub header: DESCRIPTION_HEADER,
         pub entry: [u8; 0],
     }
 
     /// https://learn.microsoft.com/en-us/windows-hardware/drivers/serports/serial-port-console-redirection-table
-    ///
-    /// NOTE: Some `u32`s in this struct are not properly 4-byte aligned, so we specify them as
-    /// `[u8; 4]` instead.
-    #[repr(C)]
+    #[repr(packed)]
     pub struct SPCR {
         pub header: DESCRIPTION_HEADER,
         pub interface_type: u8,
@@ -182,7 +181,7 @@ mod acpi {
         pub base_address: GAS,
         pub interrupt_type: u8,
         pub irq: u8,
-        pub global_system_interrupt: [u8; 4],
+        pub global_system_interrupt: u32,
         pub configured_baud_rate: u8,
         pub parity: u8,
         pub stop_bits: u8,
@@ -194,9 +193,9 @@ mod acpi {
         pub pci_bus_number: u8,
         pub pci_device_number: u8,
         pub pci_function_number: u8,
-        pub pci_flags: [u8; 4],
+        pub pci_flags: u32,
         pub pci_segment: u8,
-        pub uart_clock_frequency: [u8; 4],
+        pub uart_clock_frequency: u32,
     }
 
     /// https://learn.microsoft.com/en-us/windows-hardware/drivers/bringup/acpi-debug-port-table
