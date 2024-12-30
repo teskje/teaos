@@ -12,7 +12,7 @@ mod uart;
 
 pub fn kernel(boot_info: BootInfo) -> ! {
     init_logging(&boot_info);
-    println!("entered kernel");
+    println!("kernel logging initialized");
 
     loop {
         wfe();

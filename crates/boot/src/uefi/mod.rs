@@ -2,6 +2,7 @@
 
 pub mod sys;
 
+use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::{fmt, mem, ptr};
 
@@ -28,6 +29,10 @@ impl Uefi {
         }
     }
 
+    pub fn boot_services(&self) -> BootServices {
+        self.system_table.boot_services()
+    }
+
     pub fn console_out(&self) -> ConsoleOut {
         self.system_table.console_out()
     }
@@ -36,8 +41,8 @@ impl Uefi {
         self.system_table.config_table()
     }
 
-    pub fn get_memory_map(&self) -> MemoryMap {
-        self.boot_services.get_memory_map()
+    pub fn get_memory_map(&self, buffer: Vec<u8>) -> Result<MemoryMap, usize> {
+        self.boot_services.get_memory_map(buffer)
     }
 
     /// # Safety
@@ -59,14 +64,14 @@ impl SystemTable {
     ///
     /// `ptr` must be a valid pointer to a [`sys::SYSTEM_TABLE`].
     unsafe fn new(ptr: *mut sys::SYSTEM_TABLE) -> Self {
-        validate_ptr(ptr);
+        validate_mut_ptr(ptr);
         validate_table_header(&raw const (*ptr).hdr, sys::SYSTEM_TABLE_SIGNATURE);
 
         Self { ptr }
     }
 
     fn console_out(&self) -> ConsoleOut {
-        // Safety: `self.ptr` is a valid pointer to a `sys::SYSTEM_TABLE`.
+        // SAFETY: `self.ptr` is a valid pointer to a `sys::SYSTEM_TABLE`.
         unsafe {
             let ptr = (*self.ptr).con_out;
             ConsoleOut::new(ptr)
@@ -74,7 +79,7 @@ impl SystemTable {
     }
 
     fn boot_services(&self) -> BootServices {
-        // Safety: `self.ptr` is a valid pointer to a `sys::SYSTEM_TABLE`.
+        // SAFETY: `self.ptr` is a valid pointer to a `sys::SYSTEM_TABLE`.
         unsafe {
             let ptr = (*self.ptr).boot_services;
             BootServices::new(ptr)
@@ -82,7 +87,7 @@ impl SystemTable {
     }
 
     fn config_table(&self) -> ConfigTable {
-        // Safety: `self.ptr` is a valid pointer to a `efi::SYSTEM_TABLE`.
+        // SAFETY: `self.ptr` is a valid pointer to a `efi::SYSTEM_TABLE`.
         unsafe {
             let ptr = (*self.ptr).configuration_table;
             let len = (*self.ptr).number_of_table_entries;
@@ -100,7 +105,7 @@ impl ConsoleOut {
     ///
     /// `ptr` must be a valid pointer to a [`sys::SIMPLE_TEXT_OUTPUT_PROTOCOL`].
     unsafe fn new(ptr: *mut sys::SIMPLE_TEXT_OUTPUT_PROTOCOL) -> Self {
-        validate_ptr(ptr);
+        validate_mut_ptr(ptr);
 
         Self { ptr }
     }
@@ -131,64 +136,60 @@ impl BootServices {
     ///
     /// `ptr` must be a valid pointer to a [`sys::BOOT_SERVICES`].
     unsafe fn new(ptr: *mut sys::BOOT_SERVICES) -> Self {
-        validate_ptr(ptr);
+        validate_mut_ptr(ptr);
         validate_table_header(&raw const (*ptr).hdr, sys::BOOT_SERVICES_SIGNATURE);
 
         Self { ptr }
     }
 
-    pub fn get_memory_map(&self) -> MemoryMap {
-        // Safety: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
+    pub fn get_memory_map(&self, mut buffer: Vec<u8>) -> Result<MemoryMap, usize> {
+        // SAFETY: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
         let get_memory_map = unsafe { (*self.ptr).get_memory_map };
 
-        let mut buffer = [];
-        let mut buffer_size = 0;
+        let mut buffer_size = buffer.len();
         let mut map_key = 0;
         let mut descriptor_size = 0;
         let mut descriptor_version = 0;
 
-        // Query the required buffer size.
         let status = get_memory_map(
             &mut buffer_size,
-            buffer.as_mut_ptr(),
+            buffer.as_mut_ptr().cast(),
             &mut map_key,
             &mut descriptor_size,
             &mut descriptor_version,
         );
-        assert_eq!(status, sys::STATUS::BUFFER_TOO_SMALL);
-
-        // Allocate a sufficiently large buffer.
-        //
-        // "The actual size of the buffer allocated for the consequent call to `GetMemoryMap()`
-        // should be bigger then the value returned in `MemoryMapSize`, since allocation of the new
-        // buffer may potentially increase memory map size."
-        buffer_size += 1024;
-        let buffer = self.allocate_pool(buffer_size).cast();
-
-        // Get the memory map.
-        let status = get_memory_map(
-            &mut buffer_size,
-            buffer,
-            &mut map_key,
-            &mut descriptor_size,
-            &mut descriptor_version,
-        );
-        assert_eq!(status, sys::STATUS::SUCCESS);
         assert_eq!(descriptor_version, sys::MEMORY_DESCRIPTOR_VERSION);
 
-        // Safety: `get_memory_map` returns correct pointer and size values on `SUCCESS`
-        unsafe { MemoryMap::new(buffer, buffer_size, descriptor_size, map_key) }
+        if status == sys::STATUS::BUFFER_TOO_SMALL {
+            return Err(buffer_size);
+        }
+
+        assert_eq!(status, sys::STATUS::SUCCESS);
+
+        buffer.truncate(buffer_size);
+
+        // SAFETY: `get_memory_map` filled `buffer` correctly
+        let memory_map = unsafe { MemoryMap::new(buffer, descriptor_size, map_key) };
+        Ok(memory_map)
     }
 
-    fn allocate_pool(&self, size: usize) -> *mut c_void {
-        // Safety: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
+    pub fn allocate_pool(&self, size: usize) -> *mut u8 {
+        // SAFETY: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
         let allocate_pool = unsafe { (*self.ptr).allocate_pool };
 
         let mut buffer = ptr::null_mut();
         let status = allocate_pool(sys::MEMORY_TYPE::LoaderData, size, &mut buffer);
         assert_eq!(status, sys::STATUS::SUCCESS);
 
-        buffer
+        buffer.cast()
+    }
+
+    pub fn free_pool(&self, ptr: *mut u8) {
+        // SAFETY: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
+        let free_pool = unsafe { (*self.ptr).free_pool };
+
+        let status = free_pool(ptr.cast());
+        assert_eq!(status, sys::STATUS::SUCCESS);
     }
 
     /// # Safety
@@ -196,7 +197,7 @@ impl BootServices {
     /// Calling this method invalidates any references to the boot services and protocols. Callers
     /// must ensure that all such references have been dropped or are otherwise not used anymore.
     unsafe fn exit_boot_services(self, image_handle: sys::HANDLE, map_key: usize) {
-        // Safety: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
+        // SAFETY: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
         let exit_boot_services = unsafe { (*self.ptr).exit_boot_services };
         let status = exit_boot_services(image_handle, map_key);
         assert_eq!(status, sys::STATUS::SUCCESS);
@@ -213,14 +214,14 @@ impl ConfigTable {
     ///
     /// `ptr` must be a valid pointer to an array of `len` [`sys::CONFIGURATION_TABLE`] instances.
     unsafe fn new(ptr: *mut sys::CONFIGURATION_TABLE, len: usize) -> Self {
-        validate_ptr(ptr);
+        validate_mut_ptr(ptr);
 
         Self { ptr, len }
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (sys::GUID, *mut c_void)> + '_ {
         (0..self.len).into_iter().map(|i| {
-            // Safety: `self.ptr` is a valid pointer to an array of `self.len`
+            // SAFETY: `self.ptr` is a valid pointer to an array of `self.len`
             // `sys::CONFIGURATION_TABLE` instances.
             unsafe {
                 let ptr = self.ptr.add(i);
@@ -232,8 +233,7 @@ impl ConfigTable {
 
 #[derive(Debug)]
 pub struct MemoryMap {
-    ptr: *mut c_void,
-    len: usize,
+    buffer: Vec<u8>,
     descriptor_size: usize,
     pub map_key: usize,
 }
@@ -241,75 +241,27 @@ pub struct MemoryMap {
 impl MemoryMap {
     /// # Safety
     ///
-    /// `buffer` must be a valid pointer to an array of `buffer_size / descriptor_size`
-    /// [`sys::MEMORY_DESCRIPTOR`]s, each of which is padded according to `descriptor_size`.
-    unsafe fn new(
-        buffer: *mut c_void,
-        buffer_size: usize,
-        descriptor_size: usize,
-        map_key: usize,
-    ) -> Self {
-        validate_ptr(buffer);
+    /// `buffer` must be filled with [`sys::MEMORY_DESCRIPTOR`]s, each of which is padded up to to
+    /// `descriptor_size`.
+    unsafe fn new(buffer: Vec<u8>, descriptor_size: usize, map_key: usize) -> Self {
         assert!(descriptor_size > mem::size_of::<sys::MEMORY_DESCRIPTOR>());
 
         Self {
-            ptr: buffer,
-            len: buffer_size / descriptor_size,
+            buffer,
             descriptor_size,
             map_key,
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = MemoryDescriptor> + '_ {
-        (0..self.len).into_iter().map(|i| {
-            let offset = i * self.descriptor_size;
-            // Safety: `self.ptr` is a valid pointer to an array of `self.len`
-            // `sys::MEMORY_DESCRIPTOR` instances.
-            unsafe {
-                let ptr = self.ptr.add(offset).cast();
-                MemoryDescriptor::new(ptr)
-            }
+    pub fn iter(&self) -> impl Iterator<Item = &sys::MEMORY_DESCRIPTOR> {
+        self.buffer.chunks(self.descriptor_size).map(|chunk| {
+            let ptr: *const sys::MEMORY_DESCRIPTOR = chunk.as_ptr().cast();
+            validate_ptr(ptr);
+
+            // SAFETY: `self.buffer` is filled with `sys::MEMORY_DESCRIPTORS`, each of which is
+            // padded up to `self.descriptor_size`
+            unsafe { &*ptr }
         })
-    }
-}
-
-pub struct MemoryDescriptor {
-    ptr: *mut sys::MEMORY_DESCRIPTOR,
-}
-
-impl MemoryDescriptor {
-    /// # Safety
-    ///
-    /// `ptr` must be a valid pointer to a [`sys::MEMORY_DESCRIPTOR`].
-    unsafe fn new(ptr: *mut sys::MEMORY_DESCRIPTOR) -> Self {
-        validate_ptr(ptr);
-
-        Self { ptr }
-    }
-
-    pub fn type_(&self) -> u32 {
-        // Safety: `self.ptr` is a valid pointer to a `sys::MEMORY_DESCRIPTOR`
-        unsafe { (*self.ptr).type_ }
-    }
-
-    pub fn physical_start(&self) -> sys::PHYSICAL_ADDRESS {
-        // Safety: `self.ptr` is a valid pointer to a `sys::MEMORY_DESCRIPTOR`
-        unsafe { (*self.ptr).physical_start }
-    }
-
-    pub fn virtual_start(&self) -> sys::VIRTUAL_ADDRESS {
-        // Safety: `self.ptr` is a valid pointer to a `sys::MEMORY_DESCRIPTOR`
-        unsafe { (*self.ptr).physical_start }
-    }
-
-    pub fn number_of_pages(&self) -> u64 {
-        // Safety: `self.ptr` is a valid pointer to a `sys::MEMORY_DESCRIPTOR`
-        unsafe { (*self.ptr).number_of_pages }
-    }
-
-    pub fn attribute(&self) -> u64 {
-        // Safety: `self.ptr` is a valid pointer to a `sys::MEMORY_DESCRIPTOR`
-        unsafe { (*self.ptr).attribute }
     }
 }
 
@@ -319,7 +271,18 @@ impl MemoryDescriptor {
 ///
 /// Panics if the given pointer is NULL.
 /// Panics if the given pointer is not correctly aligned.
-fn validate_ptr<T>(ptr: *mut T) {
+fn validate_ptr<T>(ptr: *const T) {
+    assert!(!ptr.is_null());
+    assert!(ptr.is_aligned());
+}
+
+/// Validate the given pointer.
+///   
+/// # Panics
+///
+/// Panics if the given pointer is NULL.
+/// Panics if the given pointer is not correctly aligned.
+fn validate_mut_ptr<T>(ptr: *mut T) {
     assert!(!ptr.is_null());
     assert!(ptr.is_aligned());
 }

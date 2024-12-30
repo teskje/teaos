@@ -1,20 +1,28 @@
 #![cfg_attr(not(test), no_std)]
 
+extern crate alloc;
+
 pub mod info;
 pub mod log;
 
 pub use crate::uefi::Uefi;
 
 mod acpi;
+mod allocator;
 mod crc32;
 mod uefi;
 
+use alloc::vec;
+use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::mem;
 
 pub fn load(uefi: Uefi) -> ! {
     log::init(uefi.console_out());
-    println!("entered UEFI boot loader");
+    println!("boot logging initialized");
+
+    allocator::init(uefi.boot_services());
+    println!("boot allocator initialized");
 
     println!("retrieving ACPI RSDP pointer");
     let rsdp = find_acpi_rsdp(&uefi);
@@ -26,10 +34,12 @@ pub fn load(uefi: Uefi) -> ! {
     println!("  uart={uart:?}");
 
     println!("retrieving memory map");
-    let memory_map = uefi.get_memory_map();
+    let memory_map = get_memory_map(&uefi);
     dump_memory_map(&memory_map);
 
     println!("exiting boot services");
+
+    allocator::uninit();
     log::uninit();
 
     // Safety: not using any boot services or protocols after this point
@@ -47,6 +57,24 @@ pub fn load(uefi: Uefi) -> ! {
     //kernel_main(boot_config);
 }
 
+fn get_memory_map(uefi: &Uefi) -> uefi::MemoryMap {
+    // Get the memory map size.
+    let Err(mut buffer_size) = uefi.get_memory_map(vec![]) else {
+        panic!("empty buffer should always be too small");
+    };
+
+    // Allocate a sufficiently large buffer.
+    //
+    // "The actual size of the buffer allocated for the consequent call to `GetMemoryMap()`
+    // should be bigger then the value returned in `MemoryMapSize`, since allocation of the new
+    // buffer may potentially increase memory map size."
+    buffer_size += 1024;
+    let buffer: Vec<u8> = vec![0; buffer_size];
+
+    // Get the memory map.
+    uefi.get_memory_map(buffer).expect("buffer large enough")
+}
+
 fn dump_memory_map(memory_map: &uefi::MemoryMap) {
     println!("  type    physical_start     virtual_start  num_pages         attribute");
     println!("  ----  ----------------  ----------------  ---------  ----------------");
@@ -54,11 +82,11 @@ fn dump_memory_map(memory_map: &uefi::MemoryMap) {
     for entry in memory_map.iter() {
         println!(
             "  {:>4}  {:016x}  {:016x}  {:>9}  {:016x}",
-            entry.type_(),
-            entry.physical_start(),
-            entry.virtual_start(),
-            entry.number_of_pages(),
-            entry.attribute(),
+            entry.type_,
+            entry.physical_start,
+            entry.virtual_start,
+            entry.number_of_pages,
+            entry.attribute,
         );
     }
 }

@@ -70,7 +70,7 @@ pub struct BOOT_SERVICES {
     pub free_pages: *mut c_void,
     pub get_memory_map: GET_MEMORY_MAP,
     pub allocate_pool: ALLOCATE_POOL,
-    pub free_pool: *mut c_void,
+    pub free_pool: FREE_POOL,
     pub create_event: *mut c_void,
     pub set_timer: *mut c_void,
     pub wait_for_event: *mut c_void,
@@ -155,6 +155,9 @@ pub const MEMORY_DESCRIPTOR_VERSION: u32 = 1;
 
 /// [UEFI] 7.2.4 EFI_BOOT_SERVICES.AllocatePool()
 pub type ALLOCATE_POOL = extern "efiapi" fn(MEMORY_TYPE, usize, *mut *mut c_void) -> STATUS;
+
+/// [UEFI] 7.2.5 EFI_BOOT_SERVICES.FreePool()
+pub type FREE_POOL = extern "efiapi" fn(*mut c_void) -> STATUS;
 
 /// [UEFI] 7.3.7 EFI_BOOT_SERVICES.HandleProtocol()
 pub type HANDLE_PROTOCOL = extern "efiapi" fn(
