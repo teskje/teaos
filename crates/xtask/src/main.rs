@@ -66,12 +66,14 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn task_qemu(release: bool) -> anyhow::Result<()> {
-    println!("building teaos.efi (release={release})");
-    let efi_bin = cargo_build(release)?;
+    println!("building boot.efi (release={release})");
+    let boot_bin = build_boot(release)?;
+    println!("building teaos (release={release})");
+    let kernel_bin = build_kernel(release)?;
 
     println!("creating disk image");
     let esp_img = target_dir().join("esp.img");
-    create_esp_image(&esp_img, &efi_bin)?;
+    create_esp_image(&esp_img, &boot_bin, &kernel_bin)?;
 
     Command::new("qemu-system-aarch64")
         .args(["-machine", "virt"])
@@ -90,13 +92,15 @@ fn task_qemu(release: bool) -> anyhow::Result<()> {
 }
 
 async fn task_aws(release: bool, s3_bucket: &str) -> anyhow::Result<()> {
-    println!("building teaos.efi (release={release})");
-    let efi_bin = cargo_build(release)?;
+    println!("building boot.efi (release={release})");
+    let boot_bin = build_boot(release)?;
+    println!("building teaos (release={release})");
+    let kernel_bin = build_kernel(release)?;
 
     println!("creating disk image");
     let esp_img_name = "esp.img";
     let esp_img = target_dir().join(esp_img_name);
-    create_esp_image(&esp_img, &efi_bin)?;
+    create_esp_image(&esp_img, &boot_bin, &kernel_bin)?;
 
     let aws_config = aws_config::load_from_env().await;
     let s3 = aws_sdk_s3::Client::new(&aws_config);
@@ -220,11 +224,11 @@ fn target_dir() -> PathBuf {
     PathBuf::from("target")
 }
 
-fn cargo_build(release: bool) -> anyhow::Result<PathBuf> {
-    const UEFI_TARGET: &str = "aarch64-unknown-uefi";
+fn build_boot(release: bool) -> anyhow::Result<PathBuf> {
+    const TARGET: &str = "aarch64-unknown-uefi";
 
     let mut cmd = Command::new("cargo");
-    cmd.args(["build", "--bin", "teaos", "--target", UEFI_TARGET]);
+    cmd.args(["build", "--bin", "boot", "--target", TARGET]);
 
     if release {
         cmd.arg("--release");
@@ -234,12 +238,31 @@ fn cargo_build(release: bool) -> anyhow::Result<PathBuf> {
 
     let profile = if release { "release" } else { "debug" };
     let mut bin_path = target_dir();
-    bin_path.extend([UEFI_TARGET, profile, "teaos.efi"]);
+    bin_path.extend([TARGET, profile, "boot.efi"]);
 
     Ok(bin_path)
 }
 
-fn create_esp_image(img_path: &Path, efi_bin: &Path) -> anyhow::Result<()> {
+fn build_kernel(release: bool) -> anyhow::Result<PathBuf> {
+    const TARGET: &str = "aarch64-unknown-none";
+
+    let mut cmd = Command::new("cargo");
+    cmd.args(["build", "--bin", "teaos", "--target", TARGET]);
+
+    if release {
+        cmd.arg("--release");
+    }
+
+    cmd.status().context("cargo build")?;
+
+    let profile = if release { "release" } else { "debug" };
+    let mut bin_path = target_dir();
+    bin_path.extend([TARGET, profile, "teaos"]);
+
+    Ok(bin_path)
+}
+
+fn create_esp_image(img_path: &Path, boot_bin: &Path, kernel_bin: &Path) -> anyhow::Result<()> {
     const MB: u64 = 1024 * 1024;
     const DISK_SIZE: u64 = 100 * MB;
     const PART_SIZE: u64 = 99 * MB;
@@ -275,14 +298,19 @@ fn create_esp_image(img_path: &Path, efi_bin: &Path) -> anyhow::Result<()> {
     // Format the EFI partition as FAT32.
     fatfs::format_volume(&mut partition, FormatVolumeOptions::new())?;
 
-    // Copy the EFI binary into the EFI partition.
+    // Copy the binaries into the EFI partition.
     let fs = FileSystem::new(&mut partition, FsOptions::new())?;
     let root = fs.root_dir();
     root.create_dir("efi")?;
     root.create_dir("efi/boot")?;
-    let mut boot_bin = root.create_file("efi/boot/bootaa64.efi")?;
-    let mut efi_file = File::open(efi_bin)?;
-    io::copy(&mut efi_file, &mut boot_bin)?;
+
+    let mut src = File::open(boot_bin)?;
+    let mut dst = root.create_file("efi/boot/bootaa64.efi")?;
+    io::copy(&mut src, &mut dst)?;
+
+    let mut src = File::open(kernel_bin)?;
+    let mut dst = root.create_file("kernel")?;
+    io::copy(&mut src, &mut dst)?;
 
     Ok(())
 }

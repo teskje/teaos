@@ -1,43 +1,24 @@
-//! Safe UEFI API wrappers.
+//! A safe UEFI API wrapper.
+
+pub mod sys;
 
 use core::ffi::c_void;
-use core::ptr::addr_of;
-use core::sync::atomic::{AtomicU64, Ordering};
 use core::{fmt, mem, ptr};
 
 use crate::crc32::Crc32;
 
-use super::sys;
-
-/// Tracks the number of active references that will become invalid once
-/// [`Api::exit_boot_services`] is called.
-///
-/// We use this manual method of reference tracking mechanism, instead of relying on Rust's borrow
-/// checker, because we want to be able to store references in static contexts, where non-static
-/// lifetimes won't work. For example, we store a [`ConsoleOut`] value in [`crate::log::LOGGER`] to
-/// enable early printing.
-static REF_COUNT: AtomicU64 = AtomicU64::new(0);
-
-fn inc_ref_count() {
-    REF_COUNT.fetch_add(1, Ordering::SeqCst);
-}
-
-fn dec_ref_count() {
-    REF_COUNT.fetch_sub(1, Ordering::SeqCst);
-}
-
-pub struct Api {
+pub struct Uefi {
     image_handle: sys::HANDLE,
     system_table: SystemTable,
     boot_services: BootServices,
 }
 
-impl Api {
+impl Uefi {
     /// # Safety
     ///
     /// `system_table` must be a valid pointer to a [`sys::SYSTEM_TABLE`].
-    pub unsafe fn new(image_handle: sys::HANDLE, system_table: *mut sys::SYSTEM_TABLE) -> Self {
-        let system_table = SystemTable::new(system_table);
+    pub unsafe fn new(image_handle: sys::HANDLE, system_table: *mut c_void) -> Self {
+        let system_table = SystemTable::new(system_table.cast());
         let boot_services = system_table.boot_services();
 
         Self {
@@ -55,36 +36,17 @@ impl Api {
         self.system_table.config_table()
     }
 
-    /// # Panics
-    ///
-    /// Panics if there are still active references on parts made unavailable by this call (e.g.
-    /// boot services, protocols).
-    pub fn exit_boot_services(self, map_key: usize) {
-        // Call `exit_boot_services` first, to consume `self.boot_services`, dropping its
-        // reference.
-        self.boot_services
-            .exit_boot_services(self.image_handle, map_key);
-
-        let ref_count = REF_COUNT.load(Ordering::SeqCst);
-        if ref_count != 0 {
-            panic!("called exit_boot_services with REF_COUNT={ref_count}");
-        }
-    }
-
     pub fn get_memory_map(&self) -> MemoryMap {
         self.boot_services.get_memory_map()
     }
 
-    pub fn loaded_image_protocol(&self) -> LoadedImageProtocol {
-        let interface = self
-            .boot_services
-            .handle_protocol(self.image_handle, &sys::LOADED_IMAGE_PROTOCOL_GUID);
-
-        // Safety: `interface` points to requested protocol on `SUCCESS`.
-        unsafe {
-            let ptr = interface.cast();
-            LoadedImageProtocol::new(ptr)
-        }
+    /// # Safety
+    ///
+    /// Calling this method invalidates any references to the boot services and protocols. Callers
+    /// must ensure that all such references have been dropped or are otherwise not used anymore.
+    pub unsafe fn exit_boot_services(self, map_key: usize) {
+        self.boot_services
+            .exit_boot_services(self.image_handle, map_key);
     }
 }
 
@@ -98,7 +60,7 @@ impl SystemTable {
     /// `ptr` must be a valid pointer to a [`sys::SYSTEM_TABLE`].
     unsafe fn new(ptr: *mut sys::SYSTEM_TABLE) -> Self {
         validate_ptr(ptr);
-        validate_table_header(addr_of!((*ptr).hdr), sys::SYSTEM_TABLE_SIGNATURE);
+        validate_table_header(&raw const (*ptr).hdr, sys::SYSTEM_TABLE_SIGNATURE);
 
         Self { ptr }
     }
@@ -140,8 +102,6 @@ impl ConsoleOut {
     unsafe fn new(ptr: *mut sys::SIMPLE_TEXT_OUTPUT_PROTOCOL) -> Self {
         validate_ptr(ptr);
 
-        inc_ref_count();
-
         Self { ptr }
     }
 }
@@ -162,12 +122,6 @@ impl fmt::Write for ConsoleOut {
     }
 }
 
-impl Drop for ConsoleOut {
-    fn drop(&mut self) {
-        dec_ref_count();
-    }
-}
-
 pub struct BootServices {
     ptr: *mut sys::BOOT_SERVICES,
 }
@@ -178,9 +132,7 @@ impl BootServices {
     /// `ptr` must be a valid pointer to a [`sys::BOOT_SERVICES`].
     unsafe fn new(ptr: *mut sys::BOOT_SERVICES) -> Self {
         validate_ptr(ptr);
-        validate_table_header(addr_of!((*ptr).hdr), sys::BOOT_SERVICES_SIGNATURE);
-
-        inc_ref_count();
+        validate_table_header(&raw const (*ptr).hdr, sys::BOOT_SERVICES_SIGNATURE);
 
         Self { ptr }
     }
@@ -239,57 +191,15 @@ impl BootServices {
         buffer
     }
 
-    fn handle_protocol(&self, handle: sys::HANDLE, protocol: &sys::GUID) -> *mut c_void {
-        // Safety: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
-        let handle_protocol = unsafe { (*self.ptr).handle_protocol };
-
-        let mut interface = ptr::null_mut();
-        let status = handle_protocol(handle, protocol, &mut interface);
-        assert_eq!(status, sys::STATUS::SUCCESS);
-
-        interface
-    }
-
-    pub fn exit_boot_services(self, image_handle: sys::HANDLE, map_key: usize) {
+    /// # Safety
+    ///
+    /// Calling this method invalidates any references to the boot services and protocols. Callers
+    /// must ensure that all such references have been dropped or are otherwise not used anymore.
+    unsafe fn exit_boot_services(self, image_handle: sys::HANDLE, map_key: usize) {
         // Safety: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
         let exit_boot_services = unsafe { (*self.ptr).exit_boot_services };
         let status = exit_boot_services(image_handle, map_key);
         assert_eq!(status, sys::STATUS::SUCCESS);
-    }
-}
-
-impl Drop for BootServices {
-    fn drop(&mut self) {
-        dec_ref_count();
-    }
-}
-
-pub struct LoadedImageProtocol {
-    ptr: *mut sys::LOADED_IMAGE_PROTOCOL,
-}
-
-impl LoadedImageProtocol {
-    /// # Safety
-    ///
-    /// `ptr` must be a valid pointer to a [`sys::LOADED_IMAGE_PROTOCOL`].
-    unsafe fn new(ptr: *mut sys::LOADED_IMAGE_PROTOCOL) -> Self {
-        validate_ptr(ptr);
-        assert_eq!((*ptr).revision, sys::LOADED_IMAGE_PROTOCOL_REVISION);
-
-        inc_ref_count();
-
-        Self { ptr }
-    }
-
-    pub fn image_base(&self) -> *mut c_void {
-        // Safety: `self.ptr` is a valid pointer to a `sys::LOADED_IMAGE_PROTOCOL`.
-        unsafe { (*self.ptr).image_base }
-    }
-}
-
-impl Drop for LoadedImageProtocol {
-    fn drop(&mut self) {
-        dec_ref_count();
     }
 }
 
@@ -431,8 +341,8 @@ unsafe fn validate_table_header(ptr: *const sys::TABLE_HEADER, signature: u64) {
     assert_eq!((*ptr).revision & (2 << 16), 2 << 16);
 
     let start: *const u8 = ptr.cast();
-    let crc32_start: *const u8 = addr_of!((*ptr).crc32).cast();
-    let crc32_end: *const u8 = addr_of!((*ptr).reserved).cast();
+    let crc32_start: *const u8 = (&raw const (*ptr).crc32).cast();
+    let crc32_end: *const u8 = (&raw const (*ptr).reserved).cast();
 
     let mut crc = Crc32::new();
     for i in 0..(*ptr).header_size {
