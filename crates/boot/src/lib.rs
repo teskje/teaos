@@ -4,13 +4,11 @@ extern crate alloc;
 
 pub mod info;
 pub mod log;
-pub mod sync;
-
-pub use crate::uefi::Uefi;
 
 mod acpi;
 mod allocator;
 mod crc32;
+mod sync;
 mod uefi;
 
 use alloc::vec;
@@ -18,15 +16,22 @@ use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::mem;
 
-pub fn load(uefi: Uefi) -> ! {
-    log::init(uefi.console_out());
+/// # Safety
+///
+/// `system_table` must be a valid pointer to a [`sys::SYSTEM_TABLE`].
+pub unsafe fn init_uefi(image_handle: *mut c_void, system_table: *mut c_void) {
+    uefi::init(image_handle, system_table.cast());
+}
+
+pub fn load() -> ! {
+    log::init(uefi::console_out());
     println!("boot logging initialized");
 
-    allocator::init(uefi.boot_services());
+    allocator::init(uefi::boot_services());
     println!("boot allocator initialized");
 
     println!("retrieving ACPI RSDP pointer");
-    let rsdp = find_acpi_rsdp(&uefi);
+    let rsdp = find_acpi_rsdp();
     println!("  rsdp_ptr={rsdp:#?}");
 
     println!("retrieving UART config");
@@ -34,7 +39,7 @@ pub fn load(uefi: Uefi) -> ! {
     println!("  uart={uart:?}");
 
     println!("retrieving memory map");
-    let memory_map = get_memory_map(&uefi);
+    let memory_map = get_memory_map();
     dump_memory_map(&memory_map);
 
     println!("exiting boot services");
@@ -43,7 +48,7 @@ pub fn load(uefi: Uefi) -> ! {
     log::uninit();
 
     unsafe {
-        uefi.exit_boot_services(memory_map.map_key);
+        uefi::exit_boot_services(memory_map.map_key);
     }
 
     loop {}
@@ -56,9 +61,11 @@ pub fn load(uefi: Uefi) -> ! {
     //kernel_main(boot_config);
 }
 
-fn get_memory_map(uefi: &Uefi) -> uefi::MemoryMap {
+fn get_memory_map() -> uefi::MemoryMap {
+    let bs = uefi::boot_services();
+
     // Get the memory map size.
-    let Err(mut buffer_size) = uefi.get_memory_map(vec![]) else {
+    let Err(mut buffer_size) = bs.get_memory_map(vec![]) else {
         panic!("empty buffer should always be too small");
     };
 
@@ -71,7 +78,7 @@ fn get_memory_map(uefi: &Uefi) -> uefi::MemoryMap {
     let buffer: Vec<u8> = vec![0; buffer_size];
 
     // Get the memory map.
-    uefi.get_memory_map(buffer).expect("buffer large enough")
+    bs.get_memory_map(buffer).expect("buffer large enough")
 }
 
 fn dump_memory_map(memory_map: &uefi::MemoryMap) {
@@ -90,8 +97,8 @@ fn dump_memory_map(memory_map: &uefi::MemoryMap) {
     }
 }
 
-fn find_acpi_rsdp(uefi: &Uefi) -> *mut acpi::RSDP {
-    for (guid, ptr) in uefi.config_table().iter() {
+fn find_acpi_rsdp() -> *mut acpi::RSDP {
+    for (guid, ptr) in uefi::config_table().iter() {
         if guid == uefi::sys::ACPI_TABLE_GUID {
             return ptr.cast();
         }

@@ -7,90 +7,89 @@ use core::ffi::c_void;
 use core::{fmt, mem, ptr};
 
 use crate::crc32::Crc32;
+use crate::sync::Mutex;
 
-pub struct Uefi {
+static UEFI: Mutex<Option<Uefi>> = Mutex::new(None);
+
+struct Uefi {
     image_handle: sys::HANDLE,
-    system_table: SystemTable,
-    boot_services: BootServices,
+    system_table: *mut sys::SYSTEM_TABLE,
+    boot_services_available: bool,
 }
 
 impl Uefi {
-    /// # Safety
-    ///
-    /// `system_table` must be a valid pointer to a [`sys::SYSTEM_TABLE`].
-    pub unsafe fn new(image_handle: sys::HANDLE, system_table: *mut c_void) -> Self {
-        let system_table = SystemTable::new(system_table.cast());
-        let boot_services = system_table.boot_services();
-
-        Self {
-            image_handle,
-            system_table,
-            boot_services,
-        }
-    }
-
-    pub fn boot_services(&self) -> BootServices {
-        self.system_table.boot_services()
-    }
-
-    pub fn console_out(&self) -> ConsoleOut {
-        self.system_table.console_out()
-    }
-
-    pub fn config_table(&self) -> ConfigTable {
-        self.system_table.config_table()
-    }
-
-    pub fn get_memory_map(&self, buffer: Vec<u8>) -> Result<MemoryMap, usize> {
-        self.boot_services.get_memory_map(buffer)
-    }
-
-    /// # Safety
-    ///
-    /// Calling this method invalidates any references to the boot services and protocols. Callers
-    /// must ensure that all such references have been dropped or are otherwise not used anymore.
-    pub unsafe fn exit_boot_services(self, map_key: usize) {
-        self.boot_services
-            .exit_boot_services(self.image_handle, map_key);
-    }
-}
-
-struct SystemTable {
-    ptr: *mut sys::SYSTEM_TABLE,
-}
-
-impl SystemTable {
-    /// # Safety
-    ///
-    /// `ptr` must be a valid pointer to a [`sys::SYSTEM_TABLE`].
-    unsafe fn new(ptr: *mut sys::SYSTEM_TABLE) -> Self {
-        validate_mut_ptr(ptr);
-        validate_table_header(&raw const (*ptr).hdr, sys::SYSTEM_TABLE_SIGNATURE);
-
-        Self { ptr }
+    fn borrow<F, R>(f: F) -> R
+    where
+        F: FnOnce(&mut Uefi) -> R,
+    {
+        let mut uefi = UEFI.lock();
+        let uefi = uefi
+            .as_mut()
+            .unwrap_or_else(|| panic!("UEFI not initialized"));
+        f(uefi)
     }
 
     fn console_out(&self) -> ConsoleOut {
+        assert!(self.boot_services_available);
         unsafe {
-            let ptr = (*self.ptr).con_out;
+            let ptr = (*self.system_table).con_out;
             ConsoleOut::new(ptr)
         }
     }
 
     fn boot_services(&self) -> BootServices {
+        assert!(self.boot_services_available);
         unsafe {
-            let ptr = (*self.ptr).boot_services;
+            let ptr = (*self.system_table).boot_services;
             BootServices::new(ptr)
         }
     }
 
     fn config_table(&self) -> ConfigTable {
         unsafe {
-            let ptr = (*self.ptr).configuration_table;
-            let len = (*self.ptr).number_of_table_entries;
+            let ptr = (*self.system_table).configuration_table;
+            let len = (*self.system_table).number_of_table_entries;
             ConfigTable::new(ptr, len)
         }
     }
+}
+
+/// # Safety
+///
+/// `system_table` must be a valid pointer to a [`sys::SYSTEM_TABLE`].
+pub unsafe fn init(image_handle: sys::HANDLE, system_table: *mut sys::SYSTEM_TABLE) {
+    validate_mut_ptr(system_table);
+    validate_table_header(&raw const (*system_table).hdr, sys::SYSTEM_TABLE_SIGNATURE);
+
+    *UEFI.lock() = Some(Uefi {
+        image_handle,
+        system_table,
+        boot_services_available: true,
+    });
+}
+
+/// # Safety
+///
+/// Calling this method invalidates any references to the boot services and protocols. Callers
+/// must ensure that all such references have been dropped or are otherwise not used anymore.
+pub unsafe fn exit_boot_services(map_key: usize) {
+    Uefi::borrow(|uefi| {
+        uefi.boot_services()
+            .exit_boot_services(uefi.image_handle, map_key);
+        uefi.boot_services_available = false;
+    })
+}
+
+pub fn console_out() -> ConsoleOut {
+    Uefi::borrow(|uefi| uefi.console_out())
+}
+
+pub fn boot_services() -> BootServices {
+    Uefi::borrow(|uefi| uefi.boot_services())
+}
+
+pub fn config_table() -> ConfigTable {
+    Uefi::borrow(|uefi| uefi.config_table())
 }
 
 pub struct ConsoleOut {
