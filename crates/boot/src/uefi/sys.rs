@@ -10,8 +10,8 @@ use core::ffi::c_void;
 
 /// [UEFI] 2.3.1 Data Types
 /// [UEFI] Appendix D Status Codes
-#[repr(usize)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(usize)]
 pub enum STATUS {
     SUCCESS = 0,
     BUFFER_TOO_SMALL = (1 << 63) | 5,
@@ -24,8 +24,8 @@ pub type HANDLE = *mut c_void;
 pub type GUID = [u8; 16];
 
 /// [UEFI] 4.2.1 EFI_TABLE_HEADER
-#[repr(C)]
 #[derive(Debug)]
+#[repr(C)]
 pub struct TABLE_HEADER {
     pub signature: u64,
     pub revision: u32,
@@ -38,8 +38,8 @@ pub struct TABLE_HEADER {
 pub const SYSTEM_TABLE_SIGNATURE: u64 = 0x5453595320494249;
 
 /// [UEFI] 4.3.1 EFI_SYSTEM_TABLE
-#[repr(C)]
 #[derive(Debug)]
+#[repr(C)]
 pub struct SYSTEM_TABLE {
     pub hdr: TABLE_HEADER,
     pub firmware_vendor: *mut c_void,
@@ -60,8 +60,8 @@ pub struct SYSTEM_TABLE {
 pub const BOOT_SERVICES_SIGNATURE: u64 = 0x56524553544f4f42;
 
 /// [UEFI] 4.4.1 EFI_BOOT_SERVICES
-#[repr(C)]
 #[derive(Debug)]
+#[repr(C)]
 pub struct BOOT_SERVICES {
     pub hdr: TABLE_HEADER,
     pub raise_tpl: *mut c_void,
@@ -123,8 +123,8 @@ pub const ACPI_TABLE_GUID: GUID = [
 ];
 
 /// [UEFI] 7.2.1 EFI_BOOT_SERVICES.AllocatePages()
-#[repr(u32)]
 #[derive(Debug)]
+#[repr(u32)]
 pub enum MEMORY_TYPE {
     LoaderData = 2,
 }
@@ -133,12 +133,17 @@ pub enum MEMORY_TYPE {
 pub type PHYSICAL_ADDRESS = u64;
 
 /// [UEFI] 7.2.3 EFI_BOOT_SERVICES.GetMemoryMap()
-pub type GET_MEMORY_MAP =
-    extern "efiapi" fn(*mut usize, *mut c_void, *mut usize, *mut usize, *mut u32) -> STATUS;
+pub type GET_MEMORY_MAP = extern "efiapi" fn(
+    memory_map_size: *mut usize,
+    memory_map: *mut c_void,
+    map_key: *mut usize,
+    descriptor_size: *mut usize,
+    descriptor_version: *mut u32,
+) -> STATUS;
 
 /// [UEFI] 7.2.3 EFI_BOOT_SERVICES.GetMemoryMap()
-#[repr(C)]
 #[derive(Debug)]
+#[repr(C)]
 pub struct MEMORY_DESCRIPTOR {
     pub type_: u32,
     pub physical_start: PHYSICAL_ADDRESS,
@@ -154,10 +159,11 @@ pub type VIRTUAL_ADDRESS = u64;
 pub const MEMORY_DESCRIPTOR_VERSION: u32 = 1;
 
 /// [UEFI] 7.2.4 EFI_BOOT_SERVICES.AllocatePool()
-pub type ALLOCATE_POOL = extern "efiapi" fn(MEMORY_TYPE, usize, *mut *mut c_void) -> STATUS;
+pub type ALLOCATE_POOL =
+    extern "efiapi" fn(pool_type: MEMORY_TYPE, size: usize, buffer: *mut *mut c_void) -> STATUS;
 
 /// [UEFI] 7.2.5 EFI_BOOT_SERVICES.FreePool()
-pub type FREE_POOL = extern "efiapi" fn(*mut c_void) -> STATUS;
+pub type FREE_POOL = extern "efiapi" fn(buffer: *mut c_void) -> STATUS;
 
 /// [UEFI] 7.3.7 EFI_BOOT_SERVICES.HandleProtocol()
 pub type HANDLE_PROTOCOL = extern "efiapi" fn(
@@ -167,11 +173,11 @@ pub type HANDLE_PROTOCOL = extern "efiapi" fn(
 ) -> STATUS;
 
 /// [UEFI] 7.4.6 EFI_BOOT_SERVICES.ExitBootServices()
-pub type EXIT_BOOT_SERVICES = extern "efiapi" fn(HANDLE, usize) -> STATUS;
+pub type EXIT_BOOT_SERVICES = extern "efiapi" fn(image_handle: HANDLE, map_key: usize) -> STATUS;
 
 /// [UEFI] 12.4.1 EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL
-#[repr(C)]
 #[derive(Debug)]
+#[repr(C)]
 pub struct SIMPLE_TEXT_OUTPUT_PROTOCOL {
     pub reset: *mut c_void,
     pub output_string: TEXT_STRING,
@@ -186,4 +192,5 @@ pub struct SIMPLE_TEXT_OUTPUT_PROTOCOL {
 }
 
 /// [UEFI] 12.4.3 EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString()
-type TEXT_STRING = extern "efiapi" fn(*mut SIMPLE_TEXT_OUTPUT_PROTOCOL, *const u16) -> STATUS;
+pub type TEXT_STRING =
+    extern "efiapi" fn(this: *mut SIMPLE_TEXT_OUTPUT_PROTOCOL, string: *const u16) -> STATUS;
