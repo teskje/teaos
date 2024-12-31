@@ -6,7 +6,6 @@ use crate::uefi;
 static mut ALLOCATOR: Allocator = Allocator::new();
 
 pub fn init(boot_services: uefi::BootServices) {
-    // SAFETY: no other references to `ALLOCATOR` exist
     unsafe {
         let allocator = &raw mut ALLOCATOR;
         (*allocator).boot_services = Some(boot_services);
@@ -14,7 +13,6 @@ pub fn init(boot_services: uefi::BootServices) {
 }
 
 pub fn uninit() {
-    // SAFETY: no other references to `ALLOCATOR` exist
     unsafe {
         let allocator = &raw mut ALLOCATOR;
         (*allocator).boot_services = None;

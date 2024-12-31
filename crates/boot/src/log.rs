@@ -25,7 +25,6 @@ impl fmt::Write for Logger {
 }
 
 pub fn init(out: uefi::ConsoleOut) {
-    // SAFETY: no other references to `LOGGER` exist
     unsafe {
         let logger = &raw mut LOGGER;
         (*logger).out = Some(out);
@@ -33,7 +32,6 @@ pub fn init(out: uefi::ConsoleOut) {
 }
 
 pub fn uninit() {
-    // SAFETY: no other references to `LOGGER` exist
     unsafe {
         let logger = &raw mut LOGGER;
         (*logger).out = None;
@@ -41,7 +39,6 @@ pub fn uninit() {
 }
 
 pub fn write(args: fmt::Arguments) {
-    // SAFETY: no other references to `LOGGER` exist
     unsafe {
         let logger = &raw mut LOGGER;
         fmt::write(&mut *logger, args).unwrap();

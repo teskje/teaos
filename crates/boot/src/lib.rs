@@ -29,7 +29,6 @@ pub fn load(uefi: Uefi) -> ! {
     println!("  rsdp_ptr={rsdp:#?}");
 
     println!("retrieving UART config");
-    // Safety: `rsdp` is a valid pointer to an `acpi::RSDP`.
     let uart = unsafe { find_uart(rsdp) };
     println!("  uart={uart:?}");
 
@@ -42,7 +41,6 @@ pub fn load(uefi: Uefi) -> ! {
     allocator::uninit();
     log::uninit();
 
-    // Safety: not using any boot services or protocols after this point
     unsafe {
         uefi.exit_boot_services(memory_map.map_key);
     }
@@ -101,7 +99,9 @@ fn find_acpi_rsdp(uefi: &Uefi) -> *mut acpi::RSDP {
     panic!("ACPI config table not found");
 }
 
-/// # Safety: `rsdp` must be a valid pointer to an [`acpi::RSDP`].
+/// # Safety
+///
+/// `rsdp` must be a valid pointer to an [`acpi::RSDP`].
 unsafe fn find_uart(rsdp: *mut acpi::RSDP) -> info::Uart {
     assert_eq!((*rsdp).signature, *b"RSD PTR ");
     assert_eq!((*rsdp).revision, 2);

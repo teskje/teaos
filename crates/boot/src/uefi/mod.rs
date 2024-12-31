@@ -71,7 +71,6 @@ impl SystemTable {
     }
 
     fn console_out(&self) -> ConsoleOut {
-        // SAFETY: `self.ptr` is a valid pointer to a `sys::SYSTEM_TABLE`.
         unsafe {
             let ptr = (*self.ptr).con_out;
             ConsoleOut::new(ptr)
@@ -79,7 +78,6 @@ impl SystemTable {
     }
 
     fn boot_services(&self) -> BootServices {
-        // SAFETY: `self.ptr` is a valid pointer to a `sys::SYSTEM_TABLE`.
         unsafe {
             let ptr = (*self.ptr).boot_services;
             BootServices::new(ptr)
@@ -87,7 +85,6 @@ impl SystemTable {
     }
 
     fn config_table(&self) -> ConfigTable {
-        // SAFETY: `self.ptr` is a valid pointer to a `efi::SYSTEM_TABLE`.
         unsafe {
             let ptr = (*self.ptr).configuration_table;
             let len = (*self.ptr).number_of_table_entries;
@@ -143,7 +140,6 @@ impl BootServices {
     }
 
     pub fn get_memory_map(&self, mut buffer: Vec<u8>) -> Result<MemoryMap, usize> {
-        // SAFETY: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
         let get_memory_map = unsafe { (*self.ptr).get_memory_map };
 
         let mut buffer_size = buffer.len();
@@ -168,13 +164,11 @@ impl BootServices {
 
         buffer.truncate(buffer_size);
 
-        // SAFETY: `get_memory_map` filled `buffer` correctly
         let memory_map = unsafe { MemoryMap::new(buffer, descriptor_size, map_key) };
         Ok(memory_map)
     }
 
     pub fn allocate_pool(&self, size: usize) -> *mut u8 {
-        // SAFETY: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
         let allocate_pool = unsafe { (*self.ptr).allocate_pool };
 
         let mut buffer = ptr::null_mut();
@@ -185,7 +179,6 @@ impl BootServices {
     }
 
     pub fn free_pool(&self, ptr: *mut u8) {
-        // SAFETY: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
         let free_pool = unsafe { (*self.ptr).free_pool };
 
         let status = free_pool(ptr.cast());
@@ -197,7 +190,6 @@ impl BootServices {
     /// Calling this method invalidates any references to the boot services and protocols. Callers
     /// must ensure that all such references have been dropped or are otherwise not used anymore.
     unsafe fn exit_boot_services(self, image_handle: sys::HANDLE, map_key: usize) {
-        // SAFETY: `self.ptr` is a valid pointer to a `sys::BOOT_SERVICES`.
         let exit_boot_services = unsafe { (*self.ptr).exit_boot_services };
         let status = exit_boot_services(image_handle, map_key);
         assert_eq!(status, sys::STATUS::SUCCESS);
@@ -221,8 +213,6 @@ impl ConfigTable {
 
     pub fn iter(&self) -> impl Iterator<Item = (sys::GUID, *mut c_void)> + '_ {
         (0..self.len).into_iter().map(|i| {
-            // SAFETY: `self.ptr` is a valid pointer to an array of `self.len`
-            // `sys::CONFIGURATION_TABLE` instances.
             unsafe {
                 let ptr = self.ptr.add(i);
                 ((*ptr).vendor_guid, (*ptr).vendor_table)
@@ -258,8 +248,6 @@ impl MemoryMap {
             let ptr: *const sys::MEMORY_DESCRIPTOR = chunk.as_ptr().cast();
             validate_ptr(ptr);
 
-            // SAFETY: `self.buffer` is filled with `sys::MEMORY_DESCRIPTORS`, each of which is
-            // padded up to `self.descriptor_size`
             unsafe { &*ptr }
         })
     }

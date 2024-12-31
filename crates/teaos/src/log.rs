@@ -26,7 +26,6 @@ impl fmt::Write for Logger {
 }
 
 pub fn init(uart: Uart) {
-    // SAFETY: no other references to `LOGGER` exist
     unsafe {
         let logger = &raw mut LOGGER;
         (*logger).uart = Some(uart);
@@ -34,7 +33,6 @@ pub fn init(uart: Uart) {
 }
 
 pub fn write(args: fmt::Arguments) {
-    // SAFETY: no other references to `LOGGER` exist
     unsafe {
         let logger = &raw mut LOGGER;
         fmt::write(&mut *logger, args).unwrap();

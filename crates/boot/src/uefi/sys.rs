@@ -8,8 +8,9 @@
 
 use core::ffi::c_void;
 
-/// [UEFI] 2.3.1 Data Types
-/// [UEFI] Appendix D Status Codes
+// 2.3 Calling Conventions
+// -----------------------
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(usize)]
 pub enum STATUS {
@@ -17,13 +18,13 @@ pub enum STATUS {
     BUFFER_TOO_SMALL = (1 << 63) | 5,
 }
 
-/// [UEFI] 2.3.1 Data Types
 pub type HANDLE = *mut c_void;
 
-/// [UEFI] 2.3.1 Data Types
 pub type GUID = [u8; 16];
 
-/// [UEFI] 4.2.1 EFI_TABLE_HEADER
+// 4.2 EFI Table Header
+// --------------------
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct TABLE_HEADER {
@@ -34,10 +35,11 @@ pub struct TABLE_HEADER {
     pub reserved: u32,
 }
 
-/// [UEFI] 4.3.1 EFI_SYSTEM_TABLE
+// 4.3 EFI System Table
+// --------------------
+
 pub const SYSTEM_TABLE_SIGNATURE: u64 = 0x5453595320494249;
 
-/// [UEFI] 4.3.1 EFI_SYSTEM_TABLE
 #[derive(Debug)]
 #[repr(C)]
 pub struct SYSTEM_TABLE {
@@ -56,10 +58,11 @@ pub struct SYSTEM_TABLE {
     pub configuration_table: *mut CONFIGURATION_TABLE,
 }
 
-/// [UEFI] 4.4.1 EFI_BOOT_SERVICES
+// 4.4 EFI Boot Services Table
+// ---------------------------
+
 pub const BOOT_SERVICES_SIGNATURE: u64 = 0x56524553544f4f42;
 
-/// [UEFI] 4.4.1 EFI_BOOT_SERVICES
 #[derive(Debug)]
 #[repr(C)]
 pub struct BOOT_SERVICES {
@@ -110,38 +113,32 @@ pub struct BOOT_SERVICES {
     pub create_event_ex: *mut c_void,
 }
 
-/// [UEFI] 4.6.1 EFI_CONFIGURATION_TABLE
+// 4.6 EFI Configuration Table & Properties Table
+// ----------------------------------------------
+
 #[derive(Debug)]
+#[repr(C)]
 pub struct CONFIGURATION_TABLE {
     pub vendor_guid: GUID,
     pub vendor_table: *mut c_void,
 }
 
-/// [UEFI] 4.6.1.1 Industry Standard Configuration Tables
 pub const ACPI_TABLE_GUID: GUID = [
     0x71, 0xe8, 0x68, 0x88, 0xf1, 0xe4, 0xd3, 0x11, 0xbc, 0x22, 0x00, 0x80, 0xc7, 0x3c, 0x88, 0x81,
 ];
 
-/// [UEFI] 7.2.1 EFI_BOOT_SERVICES.AllocatePages()
+// 7.2 Memory Allocation Services
+// ------------------------------
+
+pub type PHYSICAL_ADDRESS = u64;
+pub type VIRTUAL_ADDRESS = u64;
+
 #[derive(Debug)]
 #[repr(u32)]
 pub enum MEMORY_TYPE {
     LoaderData = 2,
 }
 
-/// [UEFI] 7.2.1 EFI_BOOT_SERVICES.AllocatePages()
-pub type PHYSICAL_ADDRESS = u64;
-
-/// [UEFI] 7.2.3 EFI_BOOT_SERVICES.GetMemoryMap()
-pub type GET_MEMORY_MAP = extern "efiapi" fn(
-    memory_map_size: *mut usize,
-    memory_map: *mut c_void,
-    map_key: *mut usize,
-    descriptor_size: *mut usize,
-    descriptor_version: *mut u32,
-) -> STATUS;
-
-/// [UEFI] 7.2.3 EFI_BOOT_SERVICES.GetMemoryMap()
 #[derive(Debug)]
 #[repr(C)]
 pub struct MEMORY_DESCRIPTOR {
@@ -152,30 +149,38 @@ pub struct MEMORY_DESCRIPTOR {
     pub attribute: u64,
 }
 
-/// [UEFI] 7.2.3 EFI_BOOT_SERVICES.GetMemoryMap()
-pub type VIRTUAL_ADDRESS = u64;
-
-/// [UEFI] 7.2.3 EFI_BOOT_SERVICES.GetMemoryMap()
 pub const MEMORY_DESCRIPTOR_VERSION: u32 = 1;
 
-/// [UEFI] 7.2.4 EFI_BOOT_SERVICES.AllocatePool()
+pub type GET_MEMORY_MAP = extern "efiapi" fn(
+    memory_map_size: *mut usize,
+    memory_map: *mut c_void,
+    map_key: *mut usize,
+    descriptor_size: *mut usize,
+    descriptor_version: *mut u32,
+) -> STATUS;
+
 pub type ALLOCATE_POOL =
     extern "efiapi" fn(pool_type: MEMORY_TYPE, size: usize, buffer: *mut *mut c_void) -> STATUS;
 
-/// [UEFI] 7.2.5 EFI_BOOT_SERVICES.FreePool()
 pub type FREE_POOL = extern "efiapi" fn(buffer: *mut c_void) -> STATUS;
 
-/// [UEFI] 7.3.7 EFI_BOOT_SERVICES.HandleProtocol()
+// 7.3 Protocol Handler Services
+// -----------------------------
+
 pub type HANDLE_PROTOCOL = extern "efiapi" fn(
     handle: HANDLE,
     protocol: *const GUID,
     interface: *mut *mut c_void,
 ) -> STATUS;
 
-/// [UEFI] 7.4.6 EFI_BOOT_SERVICES.ExitBootServices()
+// 7.4 Image Services
+// ------------------
+
 pub type EXIT_BOOT_SERVICES = extern "efiapi" fn(image_handle: HANDLE, map_key: usize) -> STATUS;
 
-/// [UEFI] 12.4.1 EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL
+// 12.4 Simple Text Output Protocol
+// --------------------------------
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct SIMPLE_TEXT_OUTPUT_PROTOCOL {
@@ -191,6 +196,5 @@ pub struct SIMPLE_TEXT_OUTPUT_PROTOCOL {
     pub mode: *mut c_void,
 }
 
-/// [UEFI] 12.4.3 EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString()
 pub type TEXT_STRING =
     extern "efiapi" fn(this: *mut SIMPLE_TEXT_OUTPUT_PROTOCOL, string: *const u16) -> STATUS;

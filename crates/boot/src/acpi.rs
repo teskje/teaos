@@ -7,7 +7,9 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
-/// [ACPI] 5.2.3.2 Generic Address Structure
+// 5.2 ACPI System Description Tables
+// ----------------------------------
+
 #[repr(packed)]
 pub struct GAS {
     pub address_space_id: u8,
@@ -17,7 +19,6 @@ pub struct GAS {
     pub address: u64,
 }
 
-/// [ACPI] 5.2.5.3 Root System Description Pointer (RSDP) Structure
 #[repr(packed)]
 pub struct RSDP {
     pub signature: [u8; 8],
@@ -31,7 +32,6 @@ pub struct RSDP {
     reserved: [u8; 3],
 }
 
-/// [ACPI] 5.2.6 System Description Table Header
 #[repr(packed)]
 pub struct DESCRIPTION_HEADER {
     pub signature: [u8; 4],
@@ -45,14 +45,15 @@ pub struct DESCRIPTION_HEADER {
     pub creator_revision: u32,
 }
 
-/// [APIC] 5.2.8 Extended System Description Table (XSDT)
 #[repr(packed)]
 pub struct XSDT {
     pub header: DESCRIPTION_HEADER,
     pub entry: [u8; 0],
 }
 
-/// https://learn.microsoft.com/en-us/windows-hardware/drivers/serports/serial-port-console-redirection-table
+// learn.microsoft.com
+// -------------------
+
 #[repr(packed)]
 pub struct SPCR {
     pub header: DESCRIPTION_HEADER,
@@ -78,6 +79,5 @@ pub struct SPCR {
     pub uart_clock_frequency: u32,
 }
 
-/// https://learn.microsoft.com/en-us/windows-hardware/drivers/bringup/acpi-debug-port-table
 pub const UART_TYPE_16550: u8 = 0x00;
 pub const UART_TYPE_PL011: u8 = 0x03;
