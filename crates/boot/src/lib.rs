@@ -24,11 +24,7 @@ pub unsafe fn init_uefi(image_handle: *mut c_void, system_table: *mut c_void) {
 }
 
 pub fn load() -> ! {
-    log::init(uefi::console_out());
-    println!("boot logging initialized");
-
-    allocator::init(uefi::boot_services());
-    println!("boot allocator initialized");
+    println!("entered UEFI boot loader");
 
     println!("retrieving ACPI RSDP pointer");
     let rsdp = find_acpi_rsdp();
@@ -43,13 +39,7 @@ pub fn load() -> ! {
     dump_memory_map(&memory_map);
 
     println!("exiting boot services");
-
-    allocator::uninit();
-    log::uninit();
-
-    unsafe {
-        uefi::exit_boot_services(memory_map.map_key);
-    }
+    uefi::exit_boot_services(memory_map.map_key);
 
     loop {}
 

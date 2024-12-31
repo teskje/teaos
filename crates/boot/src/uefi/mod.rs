@@ -2,7 +2,10 @@
 
 pub mod sys;
 
+mod bs_ref;
+
 use alloc::vec::Vec;
+use bs_ref::BsRef;
 use core::ffi::c_void;
 use core::{fmt, mem, ptr};
 
@@ -11,10 +14,14 @@ use crate::sync::Mutex;
 
 static UEFI: Mutex<Option<Uefi>> = Mutex::new(None);
 
+/// The number of references to boot services.
+///
+/// `None` if boot services are not available.
+static BOOT_SERVICE_REFS: Mutex<Option<u64>> = Mutex::new(None);
+
 struct Uefi {
     image_handle: sys::HANDLE,
     system_table: *mut sys::SYSTEM_TABLE,
-    boot_services_available: bool,
 }
 
 impl Uefi {
@@ -30,7 +37,6 @@ impl Uefi {
     }
 
     fn console_out(&self) -> ConsoleOut {
-        assert!(self.boot_services_available);
         unsafe {
             let ptr = (*self.system_table).con_out;
             ConsoleOut::new(ptr)
@@ -38,7 +44,6 @@ impl Uefi {
     }
 
     fn boot_services(&self) -> BootServices {
-        assert!(self.boot_services_available);
         unsafe {
             let ptr = (*self.system_table).boot_services;
             BootServices::new(ptr)
@@ -64,20 +69,20 @@ pub unsafe fn init(image_handle: sys::HANDLE, system_table: *mut sys::SYSTEM_TAB
     *UEFI.lock() = Some(Uefi {
         image_handle,
         system_table,
-        boot_services_available: true,
     });
+    *BOOT_SERVICE_REFS.lock() = Some(0);
 }
 
-/// # Safety
-///
-/// Calling this method invalidates any references to the boot services and protocols. Callers
-/// must ensure that all such references have been dropped or are otherwise not used anymore.
-pub unsafe fn exit_boot_services(map_key: usize) {
-    Uefi::borrow(|uefi| {
+pub fn exit_boot_services(map_key: usize) {
+    Uefi::borrow(|uefi| unsafe {
         uefi.boot_services()
             .exit_boot_services(uefi.image_handle, map_key);
-        uefi.boot_services_available = false;
-    })
+    });
+
+    let refs_left = BOOT_SERVICE_REFS.lock().take().unwrap();
+    if refs_left != 0 {
+        panic!("{refs_left} boot service refs left after exit_boot_services");
+    }
 }
 
 pub fn console_out() -> ConsoleOut {
@@ -93,7 +98,7 @@ pub fn config_table() -> ConfigTable {
 }
 
 pub struct ConsoleOut {
-    ptr: *mut sys::SIMPLE_TEXT_OUTPUT_PROTOCOL,
+    ptr: BsRef<*mut sys::SIMPLE_TEXT_OUTPUT_PROTOCOL>,
 }
 
 impl ConsoleOut {
@@ -103,16 +108,20 @@ impl ConsoleOut {
     unsafe fn new(ptr: *mut sys::SIMPLE_TEXT_OUTPUT_PROTOCOL) -> Self {
         validate_mut_ptr(ptr);
 
-        Self { ptr }
+        Self {
+            ptr: BsRef::new(ptr),
+        }
     }
 }
 
 impl fmt::Write for ConsoleOut {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        let output_string = unsafe { (*self.ptr).output_string };
+        let ptr = *self.ptr;
+        let output_string = unsafe { (*ptr).output_string };
+
         for c in s.encode_utf16() {
             let s = [c, 0x0000];
-            let status = output_string(self.ptr, s.as_ptr());
+            let status = output_string(ptr, s.as_ptr());
 
             if status != sys::SUCCESS {
                 return Err(fmt::Error);
@@ -124,7 +133,7 @@ impl fmt::Write for ConsoleOut {
 }
 
 pub struct BootServices {
-    ptr: *mut sys::BOOT_SERVICES,
+    ptr: BsRef<*mut sys::BOOT_SERVICES>,
 }
 
 impl BootServices {
@@ -135,11 +144,13 @@ impl BootServices {
         validate_mut_ptr(ptr);
         validate_table_header(&raw const (*ptr).hdr, sys::BOOT_SERVICES_SIGNATURE);
 
-        Self { ptr }
+        Self {
+            ptr: BsRef::new(ptr),
+        }
     }
 
     pub fn get_memory_map(&self, mut buffer: Vec<u8>) -> Result<MemoryMap, usize> {
-        let get_memory_map = unsafe { (*self.ptr).get_memory_map };
+        let get_memory_map = unsafe { (**self.ptr).get_memory_map };
 
         let mut buffer_size = buffer.len();
         let mut map_key = 0;
@@ -168,7 +179,7 @@ impl BootServices {
     }
 
     pub fn allocate_pool(&self, size: usize) -> *mut u8 {
-        let allocate_pool = unsafe { (*self.ptr).allocate_pool };
+        let allocate_pool = unsafe { (**self.ptr).allocate_pool };
 
         let mut buffer = ptr::null_mut();
         let status = allocate_pool(sys::LoaderData, size, &mut buffer);
@@ -178,7 +189,7 @@ impl BootServices {
     }
 
     pub fn free_pool(&self, ptr: *mut u8) {
-        let free_pool = unsafe { (*self.ptr).free_pool };
+        let free_pool = unsafe { (**self.ptr).free_pool };
 
         let status = free_pool(ptr.cast());
         assert_eq!(status, sys::SUCCESS);
@@ -189,7 +200,8 @@ impl BootServices {
     /// Calling this method invalidates any references to the boot services and protocols. Callers
     /// must ensure that all such references have been dropped or are otherwise not used anymore.
     unsafe fn exit_boot_services(self, image_handle: sys::HANDLE, map_key: usize) {
-        let exit_boot_services = unsafe { (*self.ptr).exit_boot_services };
+        let exit_boot_services = unsafe { (**self.ptr).exit_boot_services };
+
         let status = exit_boot_services(image_handle, map_key);
         assert_eq!(status, sys::SUCCESS);
     }

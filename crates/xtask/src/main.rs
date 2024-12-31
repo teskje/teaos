@@ -4,7 +4,7 @@ use std::process::Command;
 use std::time::Duration;
 use std::{env, io};
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use aws_sdk_ec2::client::Waiters;
 use aws_sdk_ec2::types::builders::{
     BlockDeviceMappingBuilder, EbsBlockDeviceBuilder, FilterBuilder, SnapshotDiskContainerBuilder,
@@ -234,7 +234,10 @@ fn build_boot(release: bool) -> anyhow::Result<PathBuf> {
         cmd.arg("--release");
     }
 
-    cmd.status().context("cargo build")?;
+    let status = cmd.status().context("cargo build")?;
+    if !status.success() {
+        bail!("bootloader build failed");
+    }
 
     let profile = if release { "release" } else { "debug" };
     let mut bin_path = target_dir();
@@ -253,7 +256,10 @@ fn build_kernel(release: bool) -> anyhow::Result<PathBuf> {
         cmd.arg("--release");
     }
 
-    cmd.status().context("cargo build")?;
+    let status = cmd.status().context("cargo build")?;
+    if !status.success() {
+        bail!("kernel build failed");
+    }
 
     let profile = if release { "release" } else { "debug" };
     let mut bin_path = target_dir();
