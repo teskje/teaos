@@ -1,8 +1,9 @@
 use core::fmt;
 
+use crate::sync::Mutex;
 use crate::uefi;
 
-static mut LOGGER: Logger = Logger::new();
+static LOGGER: Mutex<Logger> = Mutex::new(Logger::new());
 
 struct Logger {
     out: Option<uefi::ConsoleOut>,
@@ -25,24 +26,16 @@ impl fmt::Write for Logger {
 }
 
 pub fn init(out: uefi::ConsoleOut) {
-    unsafe {
-        let logger = &raw mut LOGGER;
-        (*logger).out = Some(out);
-    }
+    LOGGER.lock().out = Some(out);
 }
 
 pub fn uninit() {
-    unsafe {
-        let logger = &raw mut LOGGER;
-        (*logger).out = None;
-    }
+    LOGGER.lock().out = None;
 }
 
 pub fn write(args: fmt::Arguments) {
-    unsafe {
-        let logger = &raw mut LOGGER;
-        fmt::write(&mut *logger, args).unwrap();
-    }
+    let mut logger = LOGGER.lock();
+    fmt::write(&mut *logger, args).unwrap();
 }
 
 #[macro_export]

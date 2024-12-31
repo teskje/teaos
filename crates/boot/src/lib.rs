@@ -4,6 +4,7 @@ extern crate alloc;
 
 pub mod info;
 pub mod log;
+pub mod sync;
 
 pub use crate::uefi::Uefi;
 

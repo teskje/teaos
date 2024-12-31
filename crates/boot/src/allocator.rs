@@ -1,22 +1,17 @@
 use core::alloc::{GlobalAlloc, Layout};
 
+use crate::sync::Mutex;
 use crate::uefi;
 
 #[global_allocator]
-static mut ALLOCATOR: Allocator = Allocator::new();
+static ALLOCATOR: Mutex<Allocator> = Mutex::new(Allocator::new());
 
 pub fn init(boot_services: uefi::BootServices) {
-    unsafe {
-        let allocator = &raw mut ALLOCATOR;
-        (*allocator).boot_services = Some(boot_services);
-    }
+    ALLOCATOR.lock().boot_services = Some(boot_services);
 }
 
 pub fn uninit() {
-    unsafe {
-        let allocator = &raw mut ALLOCATOR;
-        (*allocator).boot_services = None;
-    }
+    ALLOCATOR.lock().boot_services = None;
 }
 
 struct Allocator {
@@ -31,9 +26,10 @@ impl Allocator {
     }
 }
 
-unsafe impl GlobalAlloc for Allocator {
+unsafe impl GlobalAlloc for Mutex<Allocator> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let Some(boot_services) = &self.boot_services else {
+        let self_ = self.lock();
+        let Some(boot_services) = &self_.boot_services else {
             panic!("allocator not initialized");
         };
 
@@ -44,7 +40,8 @@ unsafe impl GlobalAlloc for Allocator {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        let Some(boot_services) = &self.boot_services else {
+        let self_ = self.lock();
+        let Some(boot_services) = &self_.boot_services else {
             panic!("allocator not initialized");
         };
 
