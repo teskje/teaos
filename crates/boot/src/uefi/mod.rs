@@ -115,7 +115,7 @@ impl fmt::Write for ConsoleOut {
             let s = [c, 0x0000];
             let status = output_string(self.ptr, s.as_ptr());
 
-            if status != sys::STATUS::SUCCESS {
+            if status != sys::SUCCESS {
                 return Err(fmt::Error);
             }
         }
@@ -156,11 +156,11 @@ impl BootServices {
         );
         assert_eq!(descriptor_version, sys::MEMORY_DESCRIPTOR_VERSION);
 
-        if status == sys::STATUS::BUFFER_TOO_SMALL {
+        if status == sys::BUFFER_TOO_SMALL {
             return Err(buffer_size);
         }
 
-        assert_eq!(status, sys::STATUS::SUCCESS);
+        assert_eq!(status, sys::SUCCESS);
 
         buffer.truncate(buffer_size);
 
@@ -172,8 +172,8 @@ impl BootServices {
         let allocate_pool = unsafe { (*self.ptr).allocate_pool };
 
         let mut buffer = ptr::null_mut();
-        let status = allocate_pool(sys::MEMORY_TYPE::LoaderData, size, &mut buffer);
-        assert_eq!(status, sys::STATUS::SUCCESS);
+        let status = allocate_pool(sys::LoaderData, size, &mut buffer);
+        assert_eq!(status, sys::SUCCESS);
 
         buffer.cast()
     }
@@ -182,7 +182,7 @@ impl BootServices {
         let free_pool = unsafe { (*self.ptr).free_pool };
 
         let status = free_pool(ptr.cast());
-        assert_eq!(status, sys::STATUS::SUCCESS);
+        assert_eq!(status, sys::SUCCESS);
     }
 
     /// # Safety
@@ -192,7 +192,7 @@ impl BootServices {
     unsafe fn exit_boot_services(self, image_handle: sys::HANDLE, map_key: usize) {
         let exit_boot_services = unsafe { (*self.ptr).exit_boot_services };
         let status = exit_boot_services(image_handle, map_key);
-        assert_eq!(status, sys::STATUS::SUCCESS);
+        assert_eq!(status, sys::SUCCESS);
     }
 }
 
@@ -212,11 +212,9 @@ impl ConfigTable {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (sys::GUID, *mut c_void)> + '_ {
-        (0..self.len).into_iter().map(|i| {
-            unsafe {
-                let ptr = self.ptr.add(i);
-                ((*ptr).vendor_guid, (*ptr).vendor_table)
-            }
+        (0..self.len).into_iter().map(|i| unsafe {
+            let ptr = self.ptr.add(i);
+            ((*ptr).vendor_guid, (*ptr).vendor_table)
         })
     }
 }

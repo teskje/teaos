@@ -5,18 +5,14 @@
 //! [UEFI]: https://uefi.org/sites/default/files/resources/UEFI_Spec_2_10_Aug29.pdf
 
 #![allow(non_camel_case_types)]
+#![allow(non_upper_case_globals)]
 
 use core::ffi::c_void;
 
 // 2.3 Calling Conventions
 // -----------------------
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(usize)]
-pub enum STATUS {
-    SUCCESS = 0,
-    BUFFER_TOO_SMALL = (1 << 63) | 5,
-}
+pub type STATUS = usize;
 
 pub type HANDLE = *mut c_void;
 
@@ -133,16 +129,14 @@ pub const ACPI_TABLE_GUID: GUID = [
 pub type PHYSICAL_ADDRESS = u64;
 pub type VIRTUAL_ADDRESS = u64;
 
-#[derive(Debug)]
-#[repr(u32)]
-pub enum MEMORY_TYPE {
-    LoaderData = 2,
-}
+pub type MEMORY_TYPE = u32;
+
+pub const LoaderData: MEMORY_TYPE = 2;
 
 #[derive(Debug)]
 #[repr(C)]
 pub struct MEMORY_DESCRIPTOR {
-    pub type_: u32,
+    pub type_: MEMORY_TYPE,
     pub physical_start: PHYSICAL_ADDRESS,
     pub virtual_start: VIRTUAL_ADDRESS,
     pub number_of_pages: u64,
@@ -198,3 +192,8 @@ pub struct SIMPLE_TEXT_OUTPUT_PROTOCOL {
 
 pub type TEXT_STRING =
     extern "efiapi" fn(this: *mut SIMPLE_TEXT_OUTPUT_PROTOCOL, string: *const u16) -> STATUS;
+
+// Appendix D
+
+pub const SUCCESS: STATUS = 0;
+pub const BUFFER_TOO_SMALL: STATUS = (1 << 63) | 5;
