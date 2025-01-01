@@ -1,13 +1,18 @@
 //! A safe UEFI API wrapper.
 
+pub mod boot_services;
+pub mod protocol;
 pub mod sys;
 
 mod bs_ref;
+mod string;
 
+use alloc::vec;
 use alloc::vec::Vec;
-use bs_ref::BsRef;
+use boot_services::BootServices;
 use core::ffi::c_void;
-use core::{fmt, mem, ptr};
+use core::mem;
+use protocol::{ConsoleOut, FileSystem};
 
 use crate::crc32::Crc32;
 use crate::sync::Mutex;
@@ -74,15 +79,18 @@ pub unsafe fn init(image_handle: sys::HANDLE, system_table: *mut sys::SYSTEM_TAB
 }
 
 pub fn exit_boot_services(map_key: usize) {
-    Uefi::borrow(|uefi| unsafe {
-        uefi.boot_services()
-            .exit_boot_services(uefi.image_handle, map_key);
-    });
+    unsafe {
+        boot_services().exit_boot_services(image_handle(), map_key);
+    }
 
     let refs_left = BOOT_SERVICE_REFS.lock().take().unwrap();
     if refs_left != 0 {
         panic!("{refs_left} boot service refs left after exit_boot_services");
     }
+}
+
+pub fn image_handle() -> sys::HANDLE {
+    Uefi::borrow(|uefi| uefi.image_handle)
 }
 
 pub fn console_out() -> ConsoleOut {
@@ -97,114 +105,30 @@ pub fn config_table() -> ConfigTable {
     Uefi::borrow(|uefi| uefi.config_table())
 }
 
-pub struct ConsoleOut {
-    ptr: BsRef<*mut sys::SIMPLE_TEXT_OUTPUT_PROTOCOL>,
+pub fn get_memory_map() -> MemoryMap {
+    let bs = boot_services();
+
+    // Get the memory map size.
+    let mut buffer_size = bs.get_memory_map(vec![]).unwrap_err();
+
+    // Allocate a sufficiently large buffer.
+    //
+    // "The actual size of the buffer allocated for the consequent call to `GetMemoryMap()`
+    // should be bigger then the value returned in `MemoryMapSize`, since allocation of the new
+    // buffer may potentially increase memory map size."
+    buffer_size += 1024;
+    let buffer: Vec<u8> = vec![0; buffer_size];
+
+    // Get the memory map.
+    bs.get_memory_map(buffer).expect("buffer large enough")
 }
 
-impl ConsoleOut {
-    /// # Safety
-    ///
-    /// `ptr` must be a valid pointer to a [`sys::SIMPLE_TEXT_OUTPUT_PROTOCOL`].
-    unsafe fn new(ptr: *mut sys::SIMPLE_TEXT_OUTPUT_PROTOCOL) -> Self {
-        validate_mut_ptr(ptr);
+pub fn get_boot_fs() -> FileSystem {
+    let bs = boot_services();
 
-        Self {
-            ptr: BsRef::new(ptr),
-        }
-    }
-}
-
-impl fmt::Write for ConsoleOut {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        let ptr = *self.ptr;
-        let output_string = unsafe { (*ptr).output_string };
-
-        for c in s.encode_utf16() {
-            let s = [c, 0x0000];
-            let status = output_string(ptr, s.as_ptr());
-
-            if status != sys::SUCCESS {
-                return Err(fmt::Error);
-            }
-        }
-
-        Ok(())
-    }
-}
-
-pub struct BootServices {
-    ptr: BsRef<*mut sys::BOOT_SERVICES>,
-}
-
-impl BootServices {
-    /// # Safety
-    ///
-    /// `ptr` must be a valid pointer to a [`sys::BOOT_SERVICES`].
-    unsafe fn new(ptr: *mut sys::BOOT_SERVICES) -> Self {
-        validate_mut_ptr(ptr);
-        validate_table_header(&raw const (*ptr).hdr, sys::BOOT_SERVICES_SIGNATURE);
-
-        Self {
-            ptr: BsRef::new(ptr),
-        }
-    }
-
-    pub fn get_memory_map(&self, mut buffer: Vec<u8>) -> Result<MemoryMap, usize> {
-        let get_memory_map = unsafe { (**self.ptr).get_memory_map };
-
-        let mut buffer_size = buffer.len();
-        let mut map_key = 0;
-        let mut descriptor_size = 0;
-        let mut descriptor_version = 0;
-
-        let status = get_memory_map(
-            &mut buffer_size,
-            buffer.as_mut_ptr().cast(),
-            &mut map_key,
-            &mut descriptor_size,
-            &mut descriptor_version,
-        );
-        assert_eq!(descriptor_version, sys::MEMORY_DESCRIPTOR_VERSION);
-
-        if status == sys::BUFFER_TOO_SMALL {
-            return Err(buffer_size);
-        }
-
-        assert_eq!(status, sys::SUCCESS);
-
-        buffer.truncate(buffer_size);
-
-        let memory_map = unsafe { MemoryMap::new(buffer, descriptor_size, map_key) };
-        Ok(memory_map)
-    }
-
-    pub fn allocate_pool(&self, size: usize) -> *mut u8 {
-        let allocate_pool = unsafe { (**self.ptr).allocate_pool };
-
-        let mut buffer = ptr::null_mut();
-        let status = allocate_pool(sys::LoaderData, size, &mut buffer);
-        assert_eq!(status, sys::SUCCESS);
-
-        buffer.cast()
-    }
-
-    pub fn free_pool(&self, ptr: *mut u8) {
-        let free_pool = unsafe { (**self.ptr).free_pool };
-
-        let status = free_pool(ptr.cast());
-        assert_eq!(status, sys::SUCCESS);
-    }
-
-    /// # Safety
-    ///
-    /// Calling this method invalidates any references to the boot services and protocols. Callers
-    /// must ensure that all such references have been dropped or are otherwise not used anymore.
-    unsafe fn exit_boot_services(self, image_handle: sys::HANDLE, map_key: usize) {
-        let exit_boot_services = unsafe { (**self.ptr).exit_boot_services };
-
-        let status = exit_boot_services(image_handle, map_key);
-        assert_eq!(status, sys::SUCCESS);
-    }
+    let loaded_image = bs.get_loaded_image(image_handle());
+    let boot_device = loaded_image.device_handle();
+    bs.get_file_system(boot_device)
 }
 
 pub struct ConfigTable {

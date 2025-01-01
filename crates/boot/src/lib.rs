@@ -11,8 +11,6 @@ mod crc32;
 mod sync;
 mod uefi;
 
-use alloc::vec;
-use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::mem;
 
@@ -34,8 +32,13 @@ pub fn load() -> ! {
     let uart = unsafe { find_uart(rsdp) };
     println!("  uart={uart:?}");
 
+    let boot_fs = uefi::get_boot_fs();
+    let root = boot_fs.open_volume();
+    let kernel_file = root.open(b"kernel");
+    drop((boot_fs, root, kernel_file));
+
     println!("retrieving memory map");
-    let memory_map = get_memory_map();
+    let memory_map = uefi::get_memory_map();
     dump_memory_map(&memory_map);
 
     println!("exiting boot services");
@@ -49,26 +52,6 @@ pub fn load() -> ! {
     //};
     //
     //kernel_main(boot_config);
-}
-
-fn get_memory_map() -> uefi::MemoryMap {
-    let bs = uefi::boot_services();
-
-    // Get the memory map size.
-    let Err(mut buffer_size) = bs.get_memory_map(vec![]) else {
-        panic!("empty buffer should always be too small");
-    };
-
-    // Allocate a sufficiently large buffer.
-    //
-    // "The actual size of the buffer allocated for the consequent call to `GetMemoryMap()`
-    // should be bigger then the value returned in `MemoryMapSize`, since allocation of the new
-    // buffer may potentially increase memory map size."
-    buffer_size += 1024;
-    let buffer: Vec<u8> = vec![0; buffer_size];
-
-    // Get the memory map.
-    bs.get_memory_map(buffer).expect("buffer large enough")
 }
 
 fn dump_memory_map(memory_map: &uefi::MemoryMap) {

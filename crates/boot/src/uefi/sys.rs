@@ -172,6 +172,33 @@ pub type HANDLE_PROTOCOL = extern "efiapi" fn(
 
 pub type EXIT_BOOT_SERVICES = extern "efiapi" fn(image_handle: HANDLE, map_key: usize) -> STATUS;
 
+// 9.1 EFI Loaded Image Protocol
+// -----------------------------
+
+pub const LOADED_IMAGE_PROTOCOL_GUID: GUID = [
+    0xa1, 0x31, 0x1b, 0x5b, 0x62, 0x95, 0xd2, 0x11, 0x8e, 0x3f, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b,
+];
+
+pub const LOADED_IMAGE_PROTOCOL_REVISION: u32 = 0x1000;
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct LOADED_IMAGE_PROTOCOL {
+    pub revision: u32,
+    pub parent_handle: HANDLE,
+    pub system_table: *mut SYSTEM_TABLE,
+    pub device_handle: HANDLE,
+    pub file_path: *mut c_void,
+    pub reserved: *mut c_void,
+    pub load_options_size: u32,
+    pub load_options: *mut c_void,
+    pub image_base: *mut c_void,
+    pub image_size: u64,
+    pub image_code_type: MEMORY_TYPE,
+    pub image_data_type: MEMORY_TYPE,
+    pub image_unload: *mut c_void,
+}
+
 // 12.4 Simple Text Output Protocol
 // --------------------------------
 
@@ -192,6 +219,60 @@ pub struct SIMPLE_TEXT_OUTPUT_PROTOCOL {
 
 pub type TEXT_STRING =
     extern "efiapi" fn(this: *mut SIMPLE_TEXT_OUTPUT_PROTOCOL, string: *const u16) -> STATUS;
+
+// 13.4 Simple File System Protocol
+// --------------------------------
+
+pub const SIMPLE_FILE_SYSTEM_PROTOCOL_GUID: GUID = [
+    0x22, 0x5b, 0x4e, 0x96, 0x59, 0x64, 0xd2, 0x11, 0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b,
+];
+
+pub const SIMPLE_FILE_SYSTEM_PROTOCOL_REVISION: u64 = 0x10000;
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct SIMPLE_FILE_SYSTEM_PROTOCOL {
+    pub revision: u64,
+    pub open_volume: SIMPLE_FILE_SYSTEM_PROTOCOL_OPEN_VOLUME,
+}
+
+pub type SIMPLE_FILE_SYSTEM_PROTOCOL_OPEN_VOLUME = extern "efiapi" fn(
+    this: *mut SIMPLE_FILE_SYSTEM_PROTOCOL,
+    root: *mut *mut FILE_PROTOCOL,
+) -> STATUS;
+
+// 13.5 File Protocol
+// ------------------
+
+pub const FILE_PROTOCOL_REVISION: u64 = 0x10000;
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct FILE_PROTOCOL {
+    pub revision: u64,
+    pub open: FILE_OPEN,
+    pub close: FILE_CLOSE,
+    pub delete: *mut c_void,
+    pub read: *mut c_void,
+    pub write: *mut c_void,
+    pub get_position: *mut c_void,
+    pub set_position: *mut c_void,
+    pub get_info: *mut c_void,
+    pub set_info: *mut c_void,
+    pub flush: *mut c_void,
+}
+
+pub const FILE_MODE_READ: u64 = 0x0000000000000001;
+
+pub type FILE_OPEN = extern "efiapi" fn(
+    this: *mut FILE_PROTOCOL,
+    new_handle: *mut *mut FILE_PROTOCOL,
+    file_name: *const u16,
+    open_mode: u64,
+    attributes: u64,
+) -> STATUS;
+
+pub type FILE_CLOSE = extern "efiapi" fn(this: *mut FILE_PROTOCOL) -> STATUS;
 
 // Appendix D
 
