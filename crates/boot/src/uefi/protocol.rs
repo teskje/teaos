@@ -48,13 +48,10 @@ impl fmt::Write for ConsoleOut {
         let ptr = *self.ptr;
         let output_string = unsafe { (*ptr).output_string };
 
-        for c in s.encode_utf16() {
-            let s = [c, 0x0000];
-            let status = output_string(ptr, s.as_ptr());
-
-            if status != sys::SUCCESS {
-                return Err(fmt::Error);
-            }
+        let s = String::from(s);
+        let status = output_string(ptr, s.as_ptr());
+        if status != sys::SUCCESS {
+            return Err(fmt::Error);
         }
 
         Ok(())
@@ -106,7 +103,7 @@ impl File {
         }
     }
 
-    pub fn open(&self, file_name: &[u8]) -> File {
+    pub fn open(&self, file_name: &str) -> File {
         let open = unsafe { (**self.ptr).open };
 
         let file_name = String::from(file_name);

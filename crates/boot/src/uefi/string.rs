@@ -10,14 +10,9 @@ impl String {
     }
 }
 
-impl From<&[u8]> for String {
-    fn from(s: &[u8]) -> Self {
-        let mut chars = Vec::with_capacity(s.len() + 1);
-        for &byte in s {
-            chars.push(byte.into());
-        }
-        chars.push(0);
-
+impl From<&str> for String {
+    fn from(s: &str) -> Self {
+        let chars = s.encode_utf16().chain([0]).collect();
         Self { chars }
     }
 }

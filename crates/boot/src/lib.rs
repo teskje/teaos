@@ -32,9 +32,10 @@ pub fn load() -> ! {
     let uart = unsafe { find_uart(rsdp) };
     println!("  uart={uart:?}");
 
+    println!("opening kernel file");
     let boot_fs = uefi::get_boot_fs();
     let root = boot_fs.open_volume();
-    let kernel_file = root.open(b"kernel");
+    let kernel_file = root.open("\\kernel");
     drop((boot_fs, root, kernel_file));
 
     println!("retrieving memory map");
