@@ -20,8 +20,8 @@ pub struct Memory {
 #[derive(Debug)]
 pub struct MemoryBlock {
     pub type_: MemoryType,
-    pub start: u64,
-    pub pages: u64,
+    pub start: usize,
+    pub pages: usize,
 }
 
 #[derive(Debug)]

@@ -8,6 +8,8 @@ pub mod log;
 mod acpi;
 mod allocator;
 mod crc32;
+mod elf;
+mod page_table;
 mod sync;
 mod uefi;
 
@@ -15,9 +17,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::mem;
-use info::MemoryBlock;
 
 use crate::info::BootInfo;
+use crate::page_table::PageTable;
 
 /// # Safety
 ///
@@ -61,14 +63,29 @@ pub fn load() -> ! {
 fn load_kernel() -> fn(&BootInfo) -> ! {
     let boot_fs = uefi::get_boot_fs();
     let root = boot_fs.open_volume();
-    let _kernel_file = root.open("\\kernel");
+    let kernel_file = root.open("\\kernel");
 
-    // TODO
-    fn dummy_kernel_start(_boot_info: &BootInfo) -> ! {
-        loop {}
+    let page_table = PageTable::new();
+    let elf = elf::File::open(kernel_file);
+    for phdr in elf.iter_program_headers() {
+        if !phdr.is_load() {
+            continue;
+        }
+
+        let buffer = uefi::allocate_page_memory(phdr.memory_size());
+        elf.read_segment(&phdr, buffer);
+
+        let pa = buffer.as_ptr() as usize;
+        let va = phdr.virtual_address();
+        let size = buffer.len();
+        page_table.map(va, pa, size);
+        println!("  mapped {va:#x} -> {pa:#x} ({size:#x} bytes)");
     }
 
-    dummy_kernel_start
+    fn kernel_start(_: &BootInfo) -> ! {
+        loop {}
+    }
+    kernel_start
 }
 
 fn find_acpi_rsdp() -> *mut acpi::RSDP {
@@ -138,10 +155,10 @@ fn exit_boot_services() -> info::Memory {
 
     for desc in memory_map.iter() {
         if let Ok(type_) = desc.type_.try_into() {
-            let block = MemoryBlock {
+            let block = info::MemoryBlock {
                 type_,
-                start: desc.physical_start,
-                pages: desc.number_of_pages,
+                start: desc.physical_start as usize,
+                pages: desc.number_of_pages as usize,
             };
             block_info.push(block);
         }
@@ -151,4 +168,26 @@ fn exit_boot_services() -> info::Memory {
     mem::forget(memory_map);
 
     info::Memory { blocks: block_info }
+}
+
+/// Validate the given pointer.
+///
+/// # Panics
+///
+/// Panics if the given pointer is NULL.
+/// Panics if the given pointer is not correctly aligned.
+fn validate_ptr<T>(ptr: *const T) {
+    assert!(!ptr.is_null());
+    assert!(ptr.is_aligned());
+}
+
+/// Validate the given pointer.
+///
+/// # Panics
+///
+/// Panics if the given pointer is NULL.
+/// Panics if the given pointer is not correctly aligned.
+fn validate_mut_ptr<T>(ptr: *mut T) {
+    assert!(!ptr.is_null());
+    assert!(ptr.is_aligned());
 }

@@ -119,6 +119,22 @@ impl File {
 
         unsafe { Self::new(new_handle) }
     }
+
+    pub fn read(&self, buffer: &mut [u8]) {
+        let read = unsafe { (**self.ptr).read };
+
+        let mut buffer_size = buffer.len();
+        let status = read(*self.ptr, &mut buffer_size, buffer.as_mut_ptr().cast());
+        assert_eq!(status, sys::SUCCESS);
+        assert_eq!(buffer_size, buffer.len());
+    }
+
+    pub fn set_position(&self, position: u64) {
+        let set_position = unsafe { (**self.ptr).set_position };
+
+        let status = set_position(*self.ptr, position);
+        assert_eq!(status, sys::SUCCESS);
+    }
 }
 
 impl Drop for File {

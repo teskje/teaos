@@ -11,11 +11,12 @@ use alloc::vec;
 use alloc::vec::Vec;
 use boot_services::BootServices;
 use core::ffi::c_void;
-use core::mem;
+use core::{mem, slice};
 use protocol::{ConsoleOut, FileSystem};
 
 use crate::crc32::Crc32;
 use crate::sync::Mutex;
+use crate::{validate_mut_ptr, validate_ptr};
 
 static UEFI: Mutex<Option<Uefi>> = Mutex::new(None);
 
@@ -105,6 +106,23 @@ pub fn config_table() -> ConfigTable {
     Uefi::borrow(|uefi| uefi.config_table())
 }
 
+pub fn allocate_page_memory(size: usize) -> &'static mut [u8] {
+    const PAGE_SIZE: usize = 0x1000;
+
+    // Round up to page size.
+    let size = (size + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
+    let pages = size / PAGE_SIZE;
+
+    let address = boot_services().allocate_pages(pages);
+    let ptr = address as *mut u8;
+    let buffer = unsafe { slice::from_raw_parts_mut(ptr, size) };
+
+    // Zero the page memory.
+    buffer.iter_mut().for_each(|b| *b = 0);
+
+    buffer
+}
+
 pub fn get_memory_map_size() -> (usize, usize) {
     boot_services().get_memory_map(vec![]).unwrap_err()
 }
@@ -177,28 +195,6 @@ impl MemoryMap {
             unsafe { &*ptr }
         })
     }
-}
-
-/// Validate the given pointer.
-///   
-/// # Panics
-///
-/// Panics if the given pointer is NULL.
-/// Panics if the given pointer is not correctly aligned.
-fn validate_ptr<T>(ptr: *const T) {
-    assert!(!ptr.is_null());
-    assert!(ptr.is_aligned());
-}
-
-/// Validate the given pointer.
-///   
-/// # Panics
-///
-/// Panics if the given pointer is NULL.
-/// Panics if the given pointer is not correctly aligned.
-fn validate_mut_ptr<T>(ptr: *mut T) {
-    assert!(!ptr.is_null());
-    assert!(ptr.is_aligned());
 }
 
 /// Validate the table header referenced by the given pointer.

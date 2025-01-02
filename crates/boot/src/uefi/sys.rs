@@ -65,7 +65,7 @@ pub struct BOOT_SERVICES {
     pub hdr: TABLE_HEADER,
     pub raise_tpl: *mut c_void,
     pub restore_tpl: *mut c_void,
-    pub allocate_pages: *mut c_void,
+    pub allocate_pages: ALLOCATE_PAGES,
     pub free_pages: *mut c_void,
     pub get_memory_map: GET_MEMORY_MAP,
     pub allocate_pool: ALLOCATE_POOL,
@@ -148,6 +148,10 @@ pub const PalCode: MEMORY_TYPE = 13;
 pub const PersistentMemory: MEMORY_TYPE = 14;
 pub const UnacceptedMemoryType: MEMORY_TYPE = 15;
 
+pub type ALLOCATE_TYPE = u32;
+
+pub const AllocateAnyPages: ALLOCATE_TYPE = 0;
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct MEMORY_DESCRIPTOR {
@@ -159,6 +163,13 @@ pub struct MEMORY_DESCRIPTOR {
 }
 
 pub const MEMORY_DESCRIPTOR_VERSION: u32 = 1;
+
+pub type ALLOCATE_PAGES = extern "efiapi" fn(
+    type_: ALLOCATE_TYPE,
+    memory_type: MEMORY_TYPE,
+    pages: usize,
+    buffer: *mut PHYSICAL_ADDRESS,
+) -> STATUS;
 
 pub type GET_MEMORY_MAP = extern "efiapi" fn(
     memory_map_size: *mut usize,
@@ -268,10 +279,10 @@ pub struct FILE_PROTOCOL {
     pub open: FILE_OPEN,
     pub close: FILE_CLOSE,
     pub delete: *mut c_void,
-    pub read: *mut c_void,
+    pub read: FILE_READ,
     pub write: *mut c_void,
-    pub get_position: *mut c_void,
-    pub set_position: *mut c_void,
+    pub get_position: FILE_GET_POSITION,
+    pub set_position: FILE_SET_POSITION,
     pub get_info: *mut c_void,
     pub set_info: *mut c_void,
     pub flush: *mut c_void,
@@ -288,6 +299,17 @@ pub type FILE_OPEN = extern "efiapi" fn(
 ) -> STATUS;
 
 pub type FILE_CLOSE = extern "efiapi" fn(this: *mut FILE_PROTOCOL) -> STATUS;
+
+pub type FILE_READ = extern "efiapi" fn(
+    this: *mut FILE_PROTOCOL,
+    buffer_size: *mut usize,
+    buffer: *mut c_void,
+) -> STATUS;
+
+pub type FILE_GET_POSITION =
+    extern "efiapi" fn(this: *mut FILE_PROTOCOL, position: *mut u64) -> STATUS;
+
+pub type FILE_SET_POSITION = extern "efiapi" fn(this: *mut FILE_PROTOCOL, position: u64) -> STATUS;
 
 // Appendix D
 
