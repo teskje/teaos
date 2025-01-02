@@ -24,7 +24,7 @@ impl BootServices {
         }
     }
 
-    pub fn get_memory_map(&self, mut buffer: Vec<u8>) -> Result<MemoryMap, usize> {
+    pub fn get_memory_map(&self, mut buffer: Vec<u8>) -> Result<MemoryMap, (usize, usize)> {
         let get_memory_map = unsafe { (**self.ptr).get_memory_map };
 
         let mut buffer_size = buffer.len();
@@ -42,7 +42,7 @@ impl BootServices {
         assert_eq!(descriptor_version, sys::MEMORY_DESCRIPTOR_VERSION);
 
         if status == sys::BUFFER_TOO_SMALL {
-            return Err(buffer_size);
+            return Err((buffer_size, descriptor_size));
         }
 
         assert_eq!(status, sys::SUCCESS);

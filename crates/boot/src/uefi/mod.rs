@@ -105,22 +105,15 @@ pub fn config_table() -> ConfigTable {
     Uefi::borrow(|uefi| uefi.config_table())
 }
 
-pub fn get_memory_map() -> MemoryMap {
-    let bs = boot_services();
+pub fn get_memory_map_size() -> (usize, usize) {
+    boot_services().get_memory_map(vec![]).unwrap_err()
+}
 
-    // Get the memory map size.
-    let mut buffer_size = bs.get_memory_map(vec![]).unwrap_err();
-
-    // Allocate a sufficiently large buffer.
-    //
-    // "The actual size of the buffer allocated for the consequent call to `GetMemoryMap()`
-    // should be bigger then the value returned in `MemoryMapSize`, since allocation of the new
-    // buffer may potentially increase memory map size."
-    buffer_size += 1024;
-    let buffer: Vec<u8> = vec![0; buffer_size];
-
-    // Get the memory map.
-    bs.get_memory_map(buffer).expect("buffer large enough")
+pub fn get_memory_map(buffer: Vec<u8>) -> MemoryMap {
+    let buffer_size = buffer.len();
+    boot_services()
+        .get_memory_map(buffer)
+        .unwrap_or_else(|(size, _)| panic!("buffer too small: {buffer_size} < {size}"))
 }
 
 pub fn get_boot_fs() -> FileSystem {

@@ -131,7 +131,22 @@ pub type VIRTUAL_ADDRESS = u64;
 
 pub type MEMORY_TYPE = u32;
 
+pub const ReservedMemoryType: MEMORY_TYPE = 0;
+pub const LoaderCode: MEMORY_TYPE = 1;
 pub const LoaderData: MEMORY_TYPE = 2;
+pub const BootServicesCode: MEMORY_TYPE = 3;
+pub const BootServicesData: MEMORY_TYPE = 4;
+pub const RuntimeServicesCode: MEMORY_TYPE = 5;
+pub const RuntimeServicesData: MEMORY_TYPE = 6;
+pub const ConventionalMemory: MEMORY_TYPE = 7;
+pub const UnusableMemory: MEMORY_TYPE = 8;
+pub const ACPIReclaimMemory: MEMORY_TYPE = 9;
+pub const ACPIMemoryNVS: MEMORY_TYPE = 10;
+pub const MemoryMappedIO: MEMORY_TYPE = 11;
+pub const MemoryMappedIOPortSpace: MEMORY_TYPE = 12;
+pub const PalCode: MEMORY_TYPE = 13;
+pub const PersistentMemory: MEMORY_TYPE = 14;
+pub const UnacceptedMemoryType: MEMORY_TYPE = 15;
 
 #[derive(Debug)]
 #[repr(C)]

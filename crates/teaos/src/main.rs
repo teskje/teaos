@@ -7,7 +7,7 @@ use core::panic::PanicInfo;
 use boot::info::BootInfo;
 use teaos::println;
 
-pub fn main(boot_info: BootInfo) -> ! {
+pub fn main(boot_info: &BootInfo) -> ! {
     teaos::kernel(boot_info);
 }
 

@@ -11,8 +11,13 @@ mod crc32;
 mod sync;
 mod uefi;
 
+use alloc::vec;
+use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::mem;
+use info::MemoryBlock;
+
+use crate::info::BootInfo;
 
 /// # Safety
 ///
@@ -24,51 +29,46 @@ pub unsafe fn init_uefi(image_handle: *mut c_void, system_table: *mut c_void) {
 pub fn load() -> ! {
     println!("entered UEFI boot loader");
 
+    println!("loading kernel binary");
+    let kernel_start = load_kernel();
+    println!("  kernel_start={kernel_start:#?}");
+
     println!("retrieving ACPI RSDP pointer");
     let rsdp = find_acpi_rsdp();
     println!("  rsdp_ptr={rsdp:#?}");
 
     println!("retrieving UART config");
-    let uart = unsafe { find_uart(rsdp) };
-    println!("  uart={uart:?}");
-
-    println!("opening kernel file");
-    let boot_fs = uefi::get_boot_fs();
-    let root = boot_fs.open_volume();
-    let kernel_file = root.open("\\kernel");
-    drop((boot_fs, root, kernel_file));
-
-    println!("retrieving memory map");
-    let memory_map = uefi::get_memory_map();
-    dump_memory_map(&memory_map);
+    let uart_info = unsafe { find_uart(rsdp) };
+    println!("  uart={uart_info:?}");
 
     println!("exiting boot services");
-    uefi::exit_boot_services(memory_map.map_key);
+    let memory_info = exit_boot_services();
 
-    loop {}
+    // No (de)allocating or logging beyond this point!
+    // We have lost access to the boot services and any attempt to invoke one will panic.
 
-    //let boot_config = BootConfig {
-    //    rsdp: rsdp.cast(),
-    //    uart,
-    //};
-    //
-    //kernel_main(boot_config);
+    // TODO add high memory page tables
+    // enable TTB2 using TCR.{EPD1,IRGN1,ORGN1,SH1,TG1}
+
+    let boot_info = BootInfo {
+        memory: memory_info,
+        uart: uart_info,
+        rsdp: rsdp.cast(),
+    };
+    kernel_start(&boot_info);
 }
 
-fn dump_memory_map(memory_map: &uefi::MemoryMap) {
-    println!("  type    physical_start     virtual_start  num_pages         attribute");
-    println!("  ----  ----------------  ----------------  ---------  ----------------");
+fn load_kernel() -> fn(&BootInfo) -> ! {
+    let boot_fs = uefi::get_boot_fs();
+    let root = boot_fs.open_volume();
+    let _kernel_file = root.open("\\kernel");
 
-    for entry in memory_map.iter() {
-        println!(
-            "  {:>4}  {:016x}  {:016x}  {:>9}  {:016x}",
-            entry.type_,
-            entry.physical_start,
-            entry.virtual_start,
-            entry.number_of_pages,
-            entry.attribute,
-        );
+    // TODO
+    fn dummy_kernel_start(_boot_info: &BootInfo) -> ! {
+        loop {}
     }
+
+    dummy_kernel_start
 }
 
 fn find_acpi_rsdp() -> *mut acpi::RSDP {
@@ -122,4 +122,33 @@ unsafe fn find_uart(rsdp: *mut acpi::RSDP) -> info::Uart {
         acpi::UART_TYPE_PL011 => info::Uart::Pl011 { base: uart_base },
         value => unimplemented!("UART type: {value:#x}"),
     }
+}
+
+fn exit_boot_services() -> info::Memory {
+    let (buffer_size, desc_size) = uefi::get_memory_map_size();
+    let len = buffer_size / desc_size;
+
+    // Allocating these `Vec`s may add entries to the memory map, so we need to overprovision.
+    let buffer = vec![0; buffer_size + 1024];
+    let mut block_info = Vec::with_capacity(len + 5);
+
+    let memory_map = uefi::get_memory_map(buffer);
+
+    uefi::exit_boot_services(memory_map.map_key);
+
+    for desc in memory_map.iter() {
+        if let Ok(type_) = desc.type_.try_into() {
+            let block = MemoryBlock {
+                type_,
+                start: desc.physical_start,
+                pages: desc.number_of_pages,
+            };
+            block_info.push(block);
+        }
+    }
+
+    // We can't deallocate anymore, so we must avoid dropping the `MemoryMap`.
+    mem::forget(memory_map);
+
+    info::Memory { blocks: block_info }
 }

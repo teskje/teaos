@@ -9,11 +9,11 @@ pub enum Uart {
 
 impl Uart {
     pub unsafe fn pl011(base: *mut c_void) -> Self {
-        Self::Pl011(Pl011::new(base))
+        Self::Pl011(Pl011 { base })
     }
 
-    pub unsafe fn uart_16550(base: *mut c_void) -> Self {
-        Self::Uart16550(Uart16550::new(base))
+    pub unsafe fn uart16550(base: *mut c_void) -> Self {
+        Self::Uart16550(Uart16550 { base })
     }
 }
 
@@ -32,10 +32,6 @@ pub struct Pl011 {
 }
 
 impl Pl011 {
-    unsafe fn new(base: *mut c_void) -> Self {
-        Self { base }
-    }
-
     fn write_dr(&mut self, val: u8) {
         unsafe {
             let dr: *mut u8 = self.base.add(0x000).cast();
@@ -68,10 +64,6 @@ pub struct Uart16550 {
 }
 
 impl Uart16550 {
-    unsafe fn new(base: *mut c_void) -> Self {
-        Self { base }
-    }
-
     fn write_thr(&mut self, val: u8) {
         unsafe {
             let thr: *mut u8 = self.base.add(0b000).cast();
