@@ -3,6 +3,7 @@
 pub mod log;
 
 mod uart;
+mod memory;
 
 use core::arch::asm;
 
