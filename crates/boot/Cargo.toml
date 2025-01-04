@@ -7,3 +7,8 @@ version = "0.1.0"
 name = "boot"
 test = false
 harness = false
+
+[dependencies]
+crc = { path = "../crc" }
+elf = { path = "../elf" }
+io-traits = { path = "../io-traits" }

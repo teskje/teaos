@@ -9,14 +9,16 @@ mod string;
 
 use alloc::vec;
 use alloc::vec::Vec;
-use boot_services::BootServices;
 use core::ffi::c_void;
 use core::{mem, slice};
-use protocol::{ConsoleOut, FileSystem};
 
-use crate::crc32::Crc32;
+use crc::Crc32;
+
 use crate::sync::Mutex;
 use crate::{validate_mut_ptr, validate_ptr};
+
+use self::boot_services::BootServices;
+use self::protocol::{ConsoleOut, FileSystem};
 
 static UEFI: Mutex<Option<Uefi>> = Mutex::new(None);
 

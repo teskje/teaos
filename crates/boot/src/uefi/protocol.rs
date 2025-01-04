@@ -1,5 +1,7 @@
 use core::{fmt, ptr};
 
+use io_traits::{IoError, Read, Seek};
+
 use super::bs_ref::BsRef;
 use super::string::String;
 use super::{sys, validate_mut_ptr};
@@ -119,21 +121,28 @@ impl File {
 
         unsafe { Self::new(new_handle) }
     }
+}
 
-    pub fn read(&self, buffer: &mut [u8]) {
+impl Read for File {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         let read = unsafe { (**self.ptr).read };
 
-        let mut buffer_size = buffer.len();
-        let status = read(*self.ptr, &mut buffer_size, buffer.as_mut_ptr().cast());
+        let mut buf_size = buf.len();
+        let status = read(*self.ptr, &mut buf_size, buf.as_mut_ptr().cast());
         assert_eq!(status, sys::SUCCESS);
-        assert_eq!(buffer_size, buffer.len());
-    }
 
-    pub fn set_position(&self, position: u64) {
+        Ok(buf_size)
+    }
+}
+
+impl Seek for File {
+    fn seek(&mut self, pos: u64) -> Result<(), IoError> {
         let set_position = unsafe { (**self.ptr).set_position };
 
-        let status = set_position(*self.ptr, position);
+        let status = set_position(*self.ptr, pos as u64);
         assert_eq!(status, sys::SUCCESS);
+
+        Ok(())
     }
 }
 

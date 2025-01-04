@@ -7,8 +7,6 @@ pub mod log;
 
 mod acpi;
 mod allocator;
-mod crc32;
-mod elf;
 mod page_table;
 mod sync;
 mod uefi;
@@ -66,17 +64,19 @@ fn load_kernel() -> fn(&BootInfo) -> ! {
     let kernel_file = root.open("\\kernel");
 
     let page_table = PageTable::new();
-    let elf = elf::File::open(kernel_file);
-    for phdr in elf.iter_program_headers() {
+    let mut elf = elf::File::open(kernel_file);
+    let phdrs = elf.program_headers();
+    for phdr in phdrs {
         if !phdr.is_load() {
             continue;
         }
 
-        let buffer = uefi::allocate_page_memory(phdr.memory_size());
+        let size = phdr.memory_size() as usize;
+        let buffer = uefi::allocate_page_memory(size);
         elf.read_segment(&phdr, buffer);
 
         let pa = buffer.as_ptr() as usize;
-        let va = phdr.virtual_address();
+        let va = phdr.virtual_address() as usize;
         let size = buffer.len();
         page_table.map(va, pa, size);
         println!("  mapped {va:#x} -> {pa:#x} ({size:#x} bytes)");

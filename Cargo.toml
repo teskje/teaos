@@ -1,6 +1,9 @@
 [workspace]
 members = [
     "crates/boot",
+    "crates/crc",
+    "crates/elf",
+    "crates/io-traits",
     "crates/teaos",
     "crates/xtask",
 ]

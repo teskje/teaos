@@ -1,3 +1,17 @@
+//! Calculating CRC checksums.
+
+#![no_std]
+
+/// Calculate the CRC32 checksum for the given data.
+pub fn crc32(data: &[u8]) -> u32 {
+    let mut crc = Crc32::new();
+    for byte in data {
+        crc.update(*byte);
+    }
+    crc.finish()
+}
+
+/// Incremental CRC32 calculator.
 pub struct Crc32(u32);
 
 impl Crc32 {
@@ -55,7 +69,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn crc32() {
+    fn test_crc32() {
         const TEST_CASES: &[(&[u8], u32)] = &[
             (b"", 0x00000000),
             (b"a", 0xe8b7be43),
@@ -65,16 +79,8 @@ mod tests {
             (b"hello world", 0xd4a1185),
         ];
 
-        fn compute(data: &[u8]) -> u32 {
-            let mut crc = Crc32::new();
-            for byte in data {
-                crc.update(*byte);
-            }
-            crc.finish()
-        }
-
         for (input, expected) in TEST_CASES {
-            assert_eq!(compute(input), *expected, "input={input:?}");
+            assert_eq!(crc32(input), *expected, "input={input:?}");
         }
     }
 }
