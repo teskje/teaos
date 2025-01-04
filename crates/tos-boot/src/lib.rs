@@ -7,7 +7,7 @@ pub mod log;
 
 mod acpi;
 mod allocator;
-mod page_table;
+mod paging;
 mod sync;
 mod uefi;
 
@@ -19,7 +19,7 @@ use core::mem;
 use tos_elf::ElfFile;
 
 use crate::info::BootInfo;
-use crate::page_table::PageTable;
+use crate::paging::TranslationTable;
 
 /// # Safety
 ///
@@ -32,7 +32,7 @@ pub fn load() -> ! {
     println!("entered UEFI boot loader");
 
     println!("loading kernel binary");
-    let kernel_start = load_kernel();
+    let (kernel_start, page_table) = load_kernel();
     println!("  kernel_start={kernel_start:#?}");
 
     println!("retrieving ACPI RSDP pointer");
@@ -49,8 +49,7 @@ pub fn load() -> ! {
     // No (de)allocating or logging beyond this point!
     // We have lost access to the boot services and any attempt to invoke one will panic.
 
-    // TODO add high memory page tables
-    // enable TTB2 using TCR.{EPD1,IRGN1,ORGN1,SH1,TG1}
+    page_table.install();
 
     let boot_info = BootInfo {
         memory: memory_info,
@@ -60,13 +59,17 @@ pub fn load() -> ! {
     kernel_start(&boot_info);
 }
 
-fn load_kernel() -> fn(&BootInfo) -> ! {
+fn load_kernel() -> (fn(&BootInfo) -> !, TranslationTable) {
     let boot_fs = uefi::get_boot_fs();
     let root = boot_fs.open_volume();
     let kernel_file = root.open("\\kernel");
 
-    let page_table = PageTable::new();
     let mut elf = ElfFile::open(kernel_file);
+
+    let entry = elf.entry();
+    let entry = unsafe { mem::transmute(entry) };
+
+    let mut page_table = TranslationTable::new();
     let phdrs = elf.program_headers();
     for phdr in phdrs {
         if !phdr.is_load() {
@@ -84,10 +87,7 @@ fn load_kernel() -> fn(&BootInfo) -> ! {
         println!("  mapped {va:#x} -> {pa:#x} ({size:#x} bytes)");
     }
 
-    fn kernel_start(_: &BootInfo) -> ! {
-        loop {}
-    }
-    kernel_start
+    (entry, page_table)
 }
 
 fn find_acpi_rsdp() -> *mut acpi::RSDP {

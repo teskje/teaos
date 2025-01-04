@@ -27,6 +27,8 @@ static UEFI: Mutex<Option<Uefi>> = Mutex::new(None);
 /// `None` if boot services are not available.
 static BOOT_SERVICE_REFS: Mutex<Option<u64>> = Mutex::new(None);
 
+const PAGE_SIZE: usize = 0x1000;
+
 struct Uefi {
     image_handle: sys::HANDLE,
     system_table: *mut sys::SYSTEM_TABLE,
@@ -108,9 +110,18 @@ pub fn config_table() -> ConfigTable {
     Uefi::borrow(|uefi| uefi.config_table())
 }
 
-pub fn allocate_page_memory(size: usize) -> &'static mut [u8] {
-    const PAGE_SIZE: usize = 0x1000;
+pub fn allocate_page() -> &'static mut [u8; PAGE_SIZE] {
+    let address = boot_services().allocate_pages(1);
+    let ptr = address as *mut [u8; PAGE_SIZE];
+    let buffer = unsafe { &mut *ptr };
 
+    // Zero the page memory.
+    buffer.iter_mut().for_each(|b| *b = 0);
+
+    buffer
+}
+
+pub fn allocate_page_memory(size: usize) -> &'static mut [u8] {
     // Round up to page size.
     let size = (size + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
     let pages = size / PAGE_SIZE;

@@ -25,6 +25,10 @@ impl<R: Read + Seek> ElfFile<R> {
         Self { reader, header }
     }
 
+    pub fn entry(&self) -> usize {
+        self.header.entry as usize
+    }
+
     pub fn program_headers(&mut self) -> Vec<Phdr> {
         self.reader.seek(self.header.phoff as u64).unwrap();
 
@@ -40,7 +44,7 @@ impl<R: Read + Seek> ElfFile<R> {
     pub fn read_segment(&mut self, phdr: &Phdr, buffer: &mut [u8]) {
         let buffer = &mut buffer[..phdr.filesz as usize];
 
-        self.reader.seek(0).unwrap();
+        self.reader.seek(phdr.offset).unwrap();
         self.reader.read_exact(buffer).unwrap();
     }
 }
