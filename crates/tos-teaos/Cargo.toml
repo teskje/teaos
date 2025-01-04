@@ -1,5 +1,5 @@
 [package]
-name = "teaos"
+name = "tos-teaos"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,4 +9,4 @@ test = false
 harness = false
 
 [dependencies]
-boot = { path = "../boot" }
+tos-boot = { path = "../tos-boot" }

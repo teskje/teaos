@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::{mem, slice};
 
-use crc::Crc32;
+use tos_crc::Crc32;
 
 use crate::sync::Mutex;
 use crate::{validate_mut_ptr, validate_ptr};

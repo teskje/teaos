@@ -1,10 +1,10 @@
 [workspace]
 members = [
-    "crates/boot",
-    "crates/crc",
-    "crates/elf",
-    "crates/io-traits",
-    "crates/teaos",
+    "crates/tos-boot",
+    "crates/tos-crc",
+    "crates/tos-elf",
+    "crates/tos-io-traits",
+    "crates/tos-teaos",
     "crates/xtask",
 ]
 resolver = "2"

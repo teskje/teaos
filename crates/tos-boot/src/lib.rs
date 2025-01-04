@@ -16,6 +16,8 @@ use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::mem;
 
+use tos_elf::ElfFile;
+
 use crate::info::BootInfo;
 use crate::page_table::PageTable;
 
@@ -64,7 +66,7 @@ fn load_kernel() -> fn(&BootInfo) -> ! {
     let kernel_file = root.open("\\kernel");
 
     let page_table = PageTable::new();
-    let mut elf = elf::File::open(kernel_file);
+    let mut elf = ElfFile::open(kernel_file);
     let phdrs = elf.program_headers();
     for phdr in phdrs {
         if !phdr.is_load() {

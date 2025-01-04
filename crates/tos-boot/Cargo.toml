@@ -1,0 +1,14 @@
+[package]
+edition = "2021"
+name = "tos-boot"
+version = "0.1.0"
+
+[[bin]]
+name = "boot"
+test = false
+harness = false
+
+[dependencies]
+tos-crc = { path = "../tos-crc" }
+tos-elf = { path = "../tos-elf" }
+tos-io-traits = { path = "../tos-io-traits" }

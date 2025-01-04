@@ -1,4 +1,4 @@
 [package]
 edition = "2021"
-name = "crc"
+name = "tos-crc"
 version = "0.1.0"

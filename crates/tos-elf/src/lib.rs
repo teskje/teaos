@@ -8,14 +8,14 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::mem;
 
-use io_traits::{Read, Seek};
+use tos_io_traits::{Read, Seek};
 
-pub struct File<R> {
+pub struct ElfFile<R> {
     reader: R,
     header: Ehdr,
 }
 
-impl<R: Read + Seek> File<R> {
+impl<R: Read + Seek> ElfFile<R> {
     pub fn open(mut reader: R) -> Self {
         let mut buffer = vec![0; mem::size_of::<Ehdr>()];
         reader.seek(0).unwrap();

@@ -7,7 +7,7 @@ mod memory;
 
 use core::arch::asm;
 
-use boot::info::{self, BootInfo};
+use tos_boot::info::{self, BootInfo};
 
 use crate::uart::Uart;
 

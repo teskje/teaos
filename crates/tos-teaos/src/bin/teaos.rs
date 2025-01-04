@@ -4,12 +4,12 @@
 use core::arch::asm;
 use core::panic::PanicInfo;
 
-use boot::info::BootInfo;
-use teaos::println;
+use tos_boot::info::BootInfo;
+use tos_teaos::println;
 
 #[no_mangle]
 pub fn _start(boot_info: &BootInfo) -> ! {
-    teaos::kernel(boot_info);
+    tos_teaos::kernel(boot_info);
 }
 
 #[panic_handler]

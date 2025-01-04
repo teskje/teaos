@@ -1,6 +1,6 @@
 use core::{fmt, ptr};
 
-use io_traits::{IoError, Read, Seek};
+use tos_io_traits::{IoError, Read, Seek};
 
 use super::bs_ref::BsRef;
 use super::string::String;
