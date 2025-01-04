@@ -10,7 +10,8 @@ pub fn write(args: fmt::Arguments) {
 #[macro_export]
 macro_rules! println {
     ($($arg:tt)*) => {{
-        $crate::log::write(format_args!("[boot]   "));
+        let time = cpu::uptime();
+        $crate::log::write(format_args!("{time} [boot]  "));
         $crate::log::write(format_args!($($arg)*));
         $crate::log::write(format_args!("\n"));
     }};

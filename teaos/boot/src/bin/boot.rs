@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 
-use core::arch::asm;
 use core::ffi::c_void;
 use core::panic::PanicInfo;
 
@@ -20,13 +19,5 @@ fn panic(panic: &PanicInfo<'_>) -> ! {
         println!("  in file '{}' at line {}", loc.file(), loc.line());
     }
 
-    loop {
-        wfe();
-    }
-}
-
-fn wfe() {
-    unsafe {
-        asm!("wfe", options(nomem, preserves_flags, nostack));
-    }
+    cpu::halt();
 }

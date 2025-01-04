@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "teaos/boot",
+    "teaos/cpu",
     "teaos/crc",
     "teaos/elf",
     "teaos/io-traits",

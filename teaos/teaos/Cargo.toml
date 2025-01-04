@@ -10,3 +10,4 @@ harness = false
 
 [dependencies]
 boot = { path = "../boot" }
+cpu = { path = "../cpu" }

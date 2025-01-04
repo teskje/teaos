@@ -5,8 +5,6 @@ pub mod log;
 mod uart;
 mod memory;
 
-use core::arch::asm;
-
 use boot::info::{self, BootInfo};
 
 use crate::uart::Uart;
@@ -15,9 +13,7 @@ pub fn kernel(boot_info: &BootInfo) -> ! {
     unsafe { init_logging(&boot_info.uart) };
     println!("kernel logging initialized");
 
-    loop {
-        wfe();
-    }
+    cpu::halt();
 }
 
 unsafe fn init_logging(uart_info: &info::Uart) {
@@ -27,10 +23,4 @@ unsafe fn init_logging(uart_info: &info::Uart) {
     };
 
     log::init(uart);
-}
-
-fn wfe() {
-    unsafe {
-        asm!("wfe", options(nomem, preserves_flags, nostack));
-    }
 }
