@@ -545,6 +545,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "boot"
+version = "0.1.0"
+dependencies = [
+ "crc 0.1.0",
+ "elf",
+ "io-traits",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -631,6 +640,10 @@ checksum = "16b80225097f2e5ae4e7179dd2266824648f3e2f49d9134d584b76389d31c4c3"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "crc"
+version = "0.1.0"
 
 [[package]]
 name = "crc"
@@ -755,6 +768,13 @@ name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
+
+[[package]]
+name = "elf"
+version = "0.1.0"
+dependencies = [
+ "io-traits",
+]
 
 [[package]]
 name = "elliptic-curve"
@@ -913,7 +933,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ffa5448a0d9d541f1840c0e1b5fe513360861ca83c4b920619f54efe277f9254"
 dependencies = [
  "bitflags 2.6.0",
- "crc",
+ "crc 3.2.1",
  "simple-bytes",
  "uuid",
 ]
@@ -1253,6 +1273,10 @@ dependencies = [
  "equivalent",
  "hashbrown",
 ]
+
+[[package]]
+name = "io-traits"
+version = "0.1.0"
 
 [[package]]
 name = "itoa"
@@ -1769,6 +1793,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "teaos"
+version = "0.1.0"
+dependencies = [
+ "boot",
+]
+
+[[package]]
 name = "time"
 version = "0.3.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1857,37 +1888,6 @@ dependencies = [
  "futures-sink",
  "pin-project-lite",
  "tokio",
-]
-
-[[package]]
-name = "tos-boot"
-version = "0.1.0"
-dependencies = [
- "tos-crc",
- "tos-elf",
- "tos-io-traits",
-]
-
-[[package]]
-name = "tos-crc"
-version = "0.1.0"
-
-[[package]]
-name = "tos-elf"
-version = "0.1.0"
-dependencies = [
- "tos-io-traits",
-]
-
-[[package]]
-name = "tos-io-traits"
-version = "0.1.0"
-
-[[package]]
-name = "tos-teaos"
-version = "0.1.0"
-dependencies = [
- "tos-boot",
 ]
 
 [[package]]

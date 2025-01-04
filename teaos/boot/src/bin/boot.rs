@@ -5,12 +5,12 @@ use core::arch::asm;
 use core::ffi::c_void;
 use core::panic::PanicInfo;
 
-use tos_boot::println;
+use boot::println;
 
 #[no_mangle]
 unsafe extern "efiapi" fn efi_main(image_handle: *mut c_void, system_table: *mut c_void) -> ! {
-    tos_boot::init_uefi(image_handle, system_table);
-    tos_boot::load();
+    boot::init_uefi(image_handle, system_table);
+    boot::load();
 }
 
 #[panic_handler]

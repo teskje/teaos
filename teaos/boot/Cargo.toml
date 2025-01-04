@@ -1,0 +1,14 @@
+[package]
+edition = "2021"
+name = "boot"
+version = "0.1.0"
+
+[[bin]]
+name = "boot"
+test = false
+harness = false
+
+[dependencies]
+crc = { path = "../crc" }
+elf = { path = "../elf" }
+io-traits = { path = "../io-traits" }

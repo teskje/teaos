@@ -8,7 +8,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::mem;
 
-use tos_io_traits::{Read, Seek};
+use io_traits::{Read, Seek};
 
 pub struct ElfFile<R> {
     reader: R,

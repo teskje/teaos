@@ -16,7 +16,7 @@ use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::mem;
 
-use tos_elf::ElfFile;
+use elf::ElfFile;
 
 use crate::info::BootInfo;
 use crate::paging::TranslationTable;

@@ -1,4 +1,4 @@
 [package]
 edition = "2021"
-name = "tos-io-traits"
+name = "io-traits"
 version = "0.1.0"

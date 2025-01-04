@@ -1,7 +1,0 @@
-[package]
-edition = "2021"
-name = "tos-elf"
-version = "0.1.0"
-
-[dependencies]
-tos-io-traits = { path = "../tos-io-traits" } 
