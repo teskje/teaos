@@ -1,5 +1,7 @@
 #![no_std]
 
+pub mod vmem;
+
 use core::arch::asm;
 
 pub fn wfe() {

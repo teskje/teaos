@@ -51,12 +51,12 @@ pub fn load() -> ! {
 
     page_table.install();
 
-    let boot_info = BootInfo {
+    let bootinfo = BootInfo {
         memory: memory_info,
         uart: uart_info,
         acpi_rsdp: PA::new(rsdp as u64),
     };
-    kernel_start(&boot_info);
+    kernel_start(&bootinfo);
 }
 
 fn load_kernel() -> (fn(&BootInfo) -> !, TranslationTable) {
@@ -84,7 +84,7 @@ fn load_kernel() -> (fn(&BootInfo) -> !, TranslationTable) {
         let va = phdr.virtual_address();
         let size = buffer.len();
         page_table.map(va, pa, size);
-        println!("  mapped {va} -> {pa} ({size:#x} bytes)");
+        println!("  mapped {va:#} -> {pa:#} ({size:#x} bytes)");
     }
 
     (entry, page_table)
@@ -168,7 +168,7 @@ fn exit_boot_services() -> info::Memory {
     // We can't deallocate anymore, so we must avoid dropping the `MemoryMap`.
     mem::forget(memory_map);
 
-    info::Memory { blocks: block_info }
+    info::Memory::new(block_info)
 }
 
 /// Validate the given pointer.

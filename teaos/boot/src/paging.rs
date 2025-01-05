@@ -1,12 +1,11 @@
 use core::arch::asm;
 
+use cpu::vmem::PAGE_SIZE;
 use kstd::memory::{PA, VA};
 
 use crate::uefi;
 
 const TABLE_LEN: usize = 512;
-
-const PAGE_SIZE: usize = 4 * (1 << 10);
 
 pub struct TranslationTable {
     level0: &'static mut [Descriptor; TABLE_LEN],
@@ -23,11 +22,11 @@ impl TranslationTable {
         assert_eq!(u64::from(va) >> 48, 0xffff, "only high memory supported");
         assert!(
             va.is_aligned_to(PAGE_SIZE),
-            "va {va} not aligned to page size"
+            "va {va:#} not aligned to page size"
         );
         assert!(
             pa.is_aligned_to(PAGE_SIZE),
-            "pa {pa} not aligned to page size"
+            "pa {pa:#} not aligned to page size"
         );
 
         while size > 0 {

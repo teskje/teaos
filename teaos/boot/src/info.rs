@@ -1,6 +1,9 @@
 //! The [`BootInfo`] passed to the kernel once loading is complete.
 
+use core::fmt;
+
 use alloc::vec::Vec;
+use cpu::vmem::PAGE_SIZE;
 use kstd::memory::PA;
 
 use crate::uefi;
@@ -17,6 +20,31 @@ pub struct Memory {
     pub blocks: Vec<MemoryBlock>,
 }
 
+impl Memory {
+    pub(crate) fn new(mut blocks: Vec<MemoryBlock>) -> Self {
+        // Cleanup: Merge consecutive blocks of the same type.
+        blocks.sort_unstable_by_key(|b| b.start);
+
+        fn can_merge(a: &MemoryBlock, b: &MemoryBlock) -> bool {
+            let consequtive = a.start + a.pages * PAGE_SIZE == b.start;
+            let same_type = a.type_ == b.type_;
+            consequtive && same_type
+        }
+
+        let mut i = 0;
+        while let (Some(cur), Some(next)) = (blocks.get(i), blocks.get(i + 1)) {
+            if can_merge(cur, next) {
+                blocks[i].pages += next.pages;
+                blocks.remove(i + 1);
+            } else {
+                i += 1;
+            }
+        }
+
+        Self { blocks }
+    }
+}
+
 #[derive(Debug)]
 pub struct MemoryBlock {
     pub type_: MemoryType,
@@ -24,7 +52,7 @@ pub struct MemoryBlock {
     pub pages: usize,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MemoryType {
     /// Unused memory: can be freely used.
     Unused,
@@ -39,6 +67,18 @@ pub enum MemoryType {
     Acpi,
     /// Memory containing memory-maped I/O registers.
     Mmio,
+}
+
+impl fmt::Display for MemoryType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Unused => "unused",
+            Self::Loader => "loader",
+            Self::Acpi => "acpi",
+            Self::Mmio => "mmio",
+        };
+        f.write_str(s)
+    }
 }
 
 impl TryFrom<uefi::sys::MEMORY_TYPE> for MemoryType {

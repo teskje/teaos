@@ -8,3 +8,8 @@ members = [
     "xtask",
 ]
 resolver = "2"
+
+# Bump the opt-level for the `teaos` crate in debug mode. Without this, filling
+# pages in the physical allocator is unbearably slow.
+[profile.dev.package.teaos]
+opt-level = 2

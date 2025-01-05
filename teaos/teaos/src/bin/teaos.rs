@@ -6,9 +6,12 @@ use core::panic::PanicInfo;
 use boot::info::BootInfo;
 use teaos::println;
 
+/// # Safety
+///
+/// The provided `bootinfo` must contain correct memory addresses.
 #[no_mangle]
-pub fn _start(boot_info: &BootInfo) -> ! {
-    teaos::kernel(boot_info);
+pub unsafe fn _start(bootinfo: &BootInfo) -> ! {
+    teaos::kernel(bootinfo);
 }
 
 #[panic_handler]
