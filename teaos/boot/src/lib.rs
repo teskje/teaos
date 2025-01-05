@@ -14,6 +14,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::mem;
+use kstd::memory::PA;
 
 use elf::ElfFile;
 
@@ -53,7 +54,7 @@ pub fn load() -> ! {
     let boot_info = BootInfo {
         memory: memory_info,
         uart: uart_info,
-        rsdp: rsdp.cast(),
+        acpi_rsdp: PA::new(rsdp as u64),
     };
     kernel_start(&boot_info);
 }
@@ -79,11 +80,11 @@ fn load_kernel() -> (fn(&BootInfo) -> !, TranslationTable) {
         let buffer = uefi::allocate_page_memory(size);
         elf.read_segment(&phdr, buffer);
 
-        let pa = buffer.as_ptr() as usize;
-        let va = phdr.virtual_address() as usize;
+        let pa = PA::new(buffer.as_ptr() as u64);
+        let va = phdr.virtual_address();
         let size = buffer.len();
         page_table.map(va, pa, size);
-        println!("  mapped {va:#x} -> {pa:#x} ({size:#x} bytes)");
+        println!("  mapped {va} -> {pa} ({size:#x} bytes)");
     }
 
     (entry, page_table)
@@ -132,12 +133,11 @@ unsafe fn find_uart(rsdp: *mut acpi::RSDP) -> info::Uart {
     let spcr = spcr.expect("SPCR table present");
     assert_eq!((*spcr).header.revision, 2);
 
-    let uart_base = (*spcr).base_address.address;
-    let uart_base = uart_base as *mut c_void;
+    let base = (*spcr).base_address.address;
 
     match (*spcr).interface_type {
-        acpi::UART_TYPE_16550 => info::Uart::Uart16550 { base: uart_base },
-        acpi::UART_TYPE_PL011 => info::Uart::Pl011 { base: uart_base },
+        acpi::UART_TYPE_16550 => info::Uart::Uart16550 { base },
+        acpi::UART_TYPE_PL011 => info::Uart::Pl011 { base },
         value => unimplemented!("UART type: {value:#x}"),
     }
 }
@@ -158,7 +158,7 @@ fn exit_boot_services() -> info::Memory {
         if let Ok(type_) = desc.type_.try_into() {
             let block = info::MemoryBlock {
                 type_,
-                start: desc.physical_start as usize,
+                start: desc.physical_start.into(),
                 pages: desc.number_of_pages as usize,
             };
             block_info.push(block);

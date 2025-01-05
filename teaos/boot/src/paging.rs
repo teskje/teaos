@@ -1,5 +1,7 @@
 use core::arch::asm;
 
+use kstd::memory::{PA, VA};
+
 use crate::uefi;
 
 const TABLE_LEN: usize = 512;
@@ -17,10 +19,16 @@ impl TranslationTable {
         }
     }
 
-    pub fn map(&mut self, mut va: usize, mut pa: usize, mut size: usize) {
-        assert_eq!(va >> 48, 0xffff, "only high memory supported");
-        assert!(page_aligned(va), "va {va:#x} not aligned to page size");
-        assert!(page_aligned(pa), "pa {pa:#x} not aligned to page size");
+    pub fn map(&mut self, mut va: VA, mut pa: PA, mut size: usize) {
+        assert_eq!(u64::from(va) >> 48, 0xffff, "only high memory supported");
+        assert!(
+            va.is_aligned_to(PAGE_SIZE),
+            "va {va} not aligned to page size"
+        );
+        assert!(
+            pa.is_aligned_to(PAGE_SIZE),
+            "pa {pa} not aligned to page size"
+        );
 
         while size > 0 {
             self.map_page(va, pa);
@@ -30,15 +38,15 @@ impl TranslationTable {
         }
     }
 
-    fn map_page(&mut self, va: usize, pa: usize) {
+    fn map_page(&mut self, va: VA, pa: PA) {
         let desc = self.get_descriptor(va, 3);
         *desc = Descriptor::page(pa);
     }
 
-    fn get_descriptor<'a>(&'a mut self, va: usize, level: usize) -> &'a mut Descriptor {
-        let table_index = |va: usize, lvl: usize| {
+    fn get_descriptor<'a>(&'a mut self, va: VA, level: usize) -> &'a mut Descriptor {
+        let table_index = |va: VA, lvl: usize| {
             let shift = 39 - 9 * lvl;
-            (va >> shift) & 0x1ff
+            (usize::from(va) >> shift) & 0x1ff
         };
 
         let idx = table_index(va, 0);
@@ -47,14 +55,13 @@ impl TranslationTable {
         for lvl in 1..=level {
             if desc.is_invalid() {
                 let buffer = uefi::allocate_page();
-                let pa = buffer.as_mut_ptr() as usize;
+                let pa = PA::new(buffer.as_mut_ptr() as u64);
                 *desc = Descriptor::table(pa);
             }
 
             let entries = desc.table_entries();
 
-            let shift = 39 - 9 * lvl;
-            let idx = (va >> shift) & 0x1ff;
+            let idx = table_index(va, lvl);
             desc = &mut entries[idx];
         }
 
@@ -66,7 +73,7 @@ impl TranslationTable {
     /// This method must be called after [`uefi::exit_boot_services`], i.e. after UEFI has released
     /// control over the system's translation tables.
     pub fn install(&self) {
-        let ttb = self.level0.as_ptr() as usize;
+        let ttb = self.level0.as_ptr() as u64;
 
         let mut tcr: u64;
         unsafe {
@@ -100,10 +107,6 @@ impl TranslationTable {
     }
 }
 
-fn page_aligned(addr: usize) -> bool {
-    addr % PAGE_SIZE == 0
-}
-
 fn allocate_table() -> &'static mut [Descriptor; TABLE_LEN] {
     let buffer = uefi::allocate_page();
     unsafe { &mut *buffer.as_mut_ptr().cast() }
@@ -114,16 +117,18 @@ fn allocate_table() -> &'static mut [Descriptor; TABLE_LEN] {
 struct Descriptor(u64);
 
 impl Descriptor {
-    fn table(pa: usize) -> Self {
-        assert!(page_aligned(pa));
-        Self(pa as u64 | 0b11)
+    fn table(pa: PA) -> Self {
+        assert!(pa.is_aligned_to(PAGE_SIZE));
+        Self(u64::from(pa) | 0b11)
     }
 
-    fn page(pa: usize) -> Self {
-        assert!(page_aligned(pa));
+    fn page(pa: PA) -> Self {
+        assert!(pa.is_aligned_to(PAGE_SIZE));
+
+        let mut x = u64::from(pa) | 0b11;
 
         // Set the access flag, to prevent the generation of Access flag faults.
-        let x = pa as u64 | (1 << 10) | 0b11;
+        x |= 1 << 10;
 
         Self(x)
     }
@@ -132,14 +137,14 @@ impl Descriptor {
         (self.0 & 1) == 0
     }
 
-    fn address(&self) -> usize {
-        self.0 as usize & 0xfffffffff000
+    fn address(&self) -> PA {
+        PA::new(self.0 & 0xfffffffff000)
     }
 
     fn table_entries(&mut self) -> &mut [Descriptor; TABLE_LEN] {
         assert_eq!(self.0 & 0b11, 0b11);
 
-        let ptr = self.address() as *mut [Descriptor; TABLE_LEN];
+        let ptr = self.address().as_mut_ptr();
         unsafe { &mut *ptr }
     }
 }

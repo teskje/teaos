@@ -2,8 +2,8 @@
 
 pub mod log;
 
-mod uart;
 mod memory;
+mod uart;
 
 use boot::info::{self, BootInfo};
 
@@ -18,8 +18,8 @@ pub fn kernel(boot_info: &BootInfo) -> ! {
 
 unsafe fn init_logging(uart_info: &info::Uart) {
     let uart = match uart_info {
-        info::Uart::Pl011 { base } => Uart::pl011(*base),
-        info::Uart::Uart16550 { base } => Uart::uart16550(*base),
+        info::Uart::Pl011 { base } => Uart::pl011(base.as_mut_ptr()),
+        info::Uart::Uart16550 { base } => Uart::uart16550(base.as_mut_ptr()),
     };
 
     log::init(uart);

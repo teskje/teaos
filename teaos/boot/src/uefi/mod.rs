@@ -111,8 +111,8 @@ pub fn config_table() -> ConfigTable {
 }
 
 pub fn allocate_page() -> &'static mut [u8; PAGE_SIZE] {
-    let address = boot_services().allocate_pages(1);
-    let ptr = address as *mut [u8; PAGE_SIZE];
+    let ptr = boot_services().allocate_pages(1);
+    let ptr = ptr as *mut [u8; PAGE_SIZE];
     let buffer = unsafe { &mut *ptr };
 
     // Zero the page memory.
@@ -126,8 +126,7 @@ pub fn allocate_page_memory(size: usize) -> &'static mut [u8] {
     let size = (size + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
     let pages = size / PAGE_SIZE;
 
-    let address = boot_services().allocate_pages(pages);
-    let ptr = address as *mut u8;
+    let ptr = boot_services().allocate_pages(pages);
     let buffer = unsafe { slice::from_raw_parts_mut(ptr, size) };
 
     // Zero the page memory.

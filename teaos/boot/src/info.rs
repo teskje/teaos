@@ -1,7 +1,7 @@
 //! The [`BootInfo`] passed to the kernel once loading is complete.
 
 use alloc::vec::Vec;
-use core::ffi::c_void;
+use kstd::memory::PA;
 
 use crate::uefi;
 
@@ -9,7 +9,7 @@ use crate::uefi;
 pub struct BootInfo {
     pub memory: Memory,
     pub uart: Uart,
-    pub rsdp: *mut c_void,
+    pub acpi_rsdp: PA,
 }
 
 #[derive(Debug)]
@@ -20,7 +20,7 @@ pub struct Memory {
 #[derive(Debug)]
 pub struct MemoryBlock {
     pub type_: MemoryType,
-    pub start: usize,
+    pub start: PA,
     pub pages: usize,
 }
 
@@ -61,6 +61,6 @@ impl TryFrom<uefi::sys::MEMORY_TYPE> for MemoryType {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Uart {
-    Pl011 { base: *mut c_void },
-    Uart16550 { base: *mut c_void },
+    Pl011 { base: PA },
+    Uart16550 { base: PA },
 }
