@@ -13,3 +13,4 @@ cpu = { path = "../cpu" }
 crc = { path = "../crc" }
 elf = { path = "../elf" }
 io-traits = { path = "../io-traits" }
+sync = { path = "../sync" }

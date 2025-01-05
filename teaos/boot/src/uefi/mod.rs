@@ -13,8 +13,8 @@ use core::ffi::c_void;
 use core::{mem, slice};
 
 use crc::Crc32;
+use sync::Mutex;
 
-use crate::sync::Mutex;
 use crate::{validate_mut_ptr, validate_ptr};
 
 use self::boot_services::BootServices;

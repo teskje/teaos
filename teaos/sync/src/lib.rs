@@ -1,30 +1,32 @@
 //! Thread synchronization primitives.
 //!
-//! The boot loader is single-threaded, so the "synchronization" merely consists of asserting that
-//! there is no concurrenct access to the protected data.
+//! For now, both boot loader and kernel are single-threaded, so the "synchronization" merely
+//! consists of asserting that there is no concurrenct access to the protected data.
+
+#![no_std]
 
 use core::cell::UnsafeCell;
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicBool, Ordering};
 
 /// A simple lock.
-struct Lock {
+pub struct Lock {
     locked: AtomicBool,
 }
 
 impl Lock {
-    const fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             locked: AtomicBool::new(false),
         }
     }
 
-    fn lock(&self) {
+    pub fn lock(&self) {
         let was_locked = self.locked.swap(true, Ordering::SeqCst);
         assert!(!was_locked);
     }
 
-    fn unlock(&self) {
+    pub fn unlock(&self) {
         self.locked.swap(false, Ordering::SeqCst);
     }
 }

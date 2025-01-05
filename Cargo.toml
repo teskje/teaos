@@ -5,6 +5,7 @@ members = [
     "teaos/crc",
     "teaos/elf",
     "teaos/io-traits",
+    "teaos/sync",
     "teaos/teaos",
     "xtask",
 ]

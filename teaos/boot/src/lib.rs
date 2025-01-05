@@ -8,7 +8,6 @@ pub mod log;
 mod acpi;
 mod allocator;
 mod paging;
-mod sync;
 mod uefi;
 
 use alloc::vec;

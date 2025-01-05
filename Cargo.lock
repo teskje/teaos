@@ -552,6 +552,7 @@ dependencies = [
  "crc 0.1.0",
  "elf",
  "io-traits",
+ "sync",
 ]
 
 [[package]]
@@ -1787,6 +1788,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync"
+version = "0.1.0"
+
+[[package]]
 name = "synstructure"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1803,6 +1808,7 @@ version = "0.1.0"
 dependencies = [
  "boot",
  "cpu",
+ "sync",
 ]
 
 [[package]]
