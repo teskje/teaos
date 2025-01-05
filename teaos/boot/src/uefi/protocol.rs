@@ -1,6 +1,6 @@
 use core::{fmt, ptr};
 
-use io_traits::{IoError, Read, Seek};
+use kstd::io::{self, Read, Seek};
 
 use super::bs_ref::BsRef;
 use super::string::String;
@@ -124,7 +124,7 @@ impl File {
 }
 
 impl Read for File {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
         let read = unsafe { (**self.ptr).read };
 
         let mut buf_size = buf.len();
@@ -136,7 +136,7 @@ impl Read for File {
 }
 
 impl Seek for File {
-    fn seek(&mut self, pos: u64) -> Result<(), IoError> {
+    fn seek(&mut self, pos: u64) -> Result<(), io::Error> {
         let set_position = unsafe { (**self.ptr).set_position };
 
         let status = set_position(*self.ptr, pos as u64);

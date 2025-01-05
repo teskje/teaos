@@ -4,4 +4,4 @@ name = "elf"
 version = "0.1.0"
 
 [dependencies]
-io-traits = { path = "../io-traits" } 
+kstd = { path = "../kstd" }

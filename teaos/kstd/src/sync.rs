@@ -3,8 +3,6 @@
 //! For now, both boot loader and kernel are single-threaded, so the "synchronization" merely
 //! consists of asserting that there is no concurrenct access to the protected data.
 
-#![no_std]
-
 use core::cell::UnsafeCell;
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicBool, Ordering};

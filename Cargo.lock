@@ -551,8 +551,7 @@ dependencies = [
  "cpu",
  "crc 0.1.0",
  "elf",
- "io-traits",
- "sync",
+ "kstd",
 ]
 
 [[package]]
@@ -779,7 +778,7 @@ checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 name = "elf"
 version = "0.1.0"
 dependencies = [
- "io-traits",
+ "kstd",
 ]
 
 [[package]]
@@ -1281,10 +1280,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "io-traits"
-version = "0.1.0"
-
-[[package]]
 name = "itoa"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1299,6 +1294,10 @@ dependencies = [
  "once_cell",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "kstd"
+version = "0.1.0"
 
 [[package]]
 name = "libc"
@@ -1788,10 +1787,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sync"
-version = "0.1.0"
-
-[[package]]
 name = "synstructure"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1808,7 +1803,7 @@ version = "0.1.0"
 dependencies = [
  "boot",
  "cpu",
- "sync",
+ "kstd",
 ]
 
 [[package]]

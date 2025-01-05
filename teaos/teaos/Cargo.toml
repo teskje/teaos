@@ -11,4 +11,4 @@ harness = false
 [dependencies]
 boot = { path = "../boot" }
 cpu = { path = "../cpu" }
-sync = { path = "../sync" }
+kstd = { path = "../kstd" }
