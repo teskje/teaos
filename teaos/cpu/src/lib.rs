@@ -4,7 +4,7 @@ use core::arch::asm;
 
 pub fn wfe() {
     unsafe {
-        asm!("wfe", options(nomem, preserves_flags, nostack));
+        asm!("WFE", options(nomem, preserves_flags, nostack));
     }
 }
 
@@ -21,8 +21,8 @@ pub fn uptime() -> u64 {
     let freq: u64;
     unsafe {
         asm!(
-            "mrs {cnt}, cntvct_el0",
-            "mrs {frq}, cntfrq_el0",
+            "MRS {cnt}, CNTVCT_EL0",
+            "MRS {frq}, CNTFRQ_EL0",
             cnt = out(reg) count,
             frq = out(reg) freq,
             options(nomem, preserves_flags, nostack),
@@ -31,4 +31,3 @@ pub fn uptime() -> u64 {
 
     count * 1_000 / freq
 }
-
