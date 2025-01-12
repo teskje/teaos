@@ -2,11 +2,13 @@
 
 pub mod log;
 
+mod exception;
 mod memory;
 mod uart;
 
 use boot::info::{self, BootInfo};
 
+use crate::memory::free_pages;
 use crate::uart::Uart;
 
 /// # Safety
@@ -18,15 +20,24 @@ pub unsafe fn kernel(bootinfo: &BootInfo) -> ! {
 
     print_bootinfo(bootinfo);
 
-    // Seed the page allocator with the unused pages.
+    println!("initializing exception handling");
+    exception::init();
+
+    println!("seeding page allocator with unused blocks");
     for block in &bootinfo.memory.blocks {
         if block.type_ == info::MemoryType::Unused {
-            memory::free_pages(block.start, block.pages);
+            free_pages(block.start, block.pages);
         }
     }
 
-    let pa = memory::alloc_page();
-    println!("allocated a page: {pa:#}");
+    //unsafe {
+    //    *(0xdeadbeef as *mut u8) = 42;
+    //}
+
+    // TODO
+    //  - take over page tables
+    //  - initialize stack
+    //  - initialize heap
 
     cpu::halt();
 }
@@ -51,10 +62,7 @@ fn print_bootinfo(bootinfo: &BootInfo) {
     println!("     start        pages    type");
     println!("  ------------------------------");
     for block in &memory.blocks {
-        println!(
-            "  {:#012}  {:8}  {}",
-            block.start, block.pages, block.type_
-        );
+        println!("  {:#012}  {:8}  {}", block.start, block.pages, block.type_);
     }
     println!("bootinfo.uart: {uart:?}");
     println!("bootinfo.acpi_rsdp: {acpi_rsdp:#}");

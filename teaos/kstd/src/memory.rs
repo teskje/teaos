@@ -115,6 +115,12 @@ impl From<usize> for VA {
     }
 }
 
+impl<T> From<&T> for VA {
+    fn from(x: &T) -> Self {
+        Self(x as *const _ as u64)
+    }
+}
+
 impl From<VA> for u64 {
     fn from(va: VA) -> Self {
         va.0

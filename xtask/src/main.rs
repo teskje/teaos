@@ -247,7 +247,7 @@ fn build_boot(release: bool) -> anyhow::Result<PathBuf> {
 }
 
 fn build_kernel(release: bool) -> anyhow::Result<PathBuf> {
-    const TARGET: &str = "aarch64-unknown-none";
+    const TARGET: &str = "aarch64-unknown-none-softfloat";
 
     let mut cmd = Command::new("cargo");
     cmd.args(["build", "--bin", "teaos", "--target", TARGET]);

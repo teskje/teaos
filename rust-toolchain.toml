@@ -1,2 +1,2 @@
 [toolchain]
-targets = ["aarch64-unknown-none", "aarch64-unknown-uefi"]
+targets = ["aarch64-unknown-none-softfloat", "aarch64-unknown-uefi"]

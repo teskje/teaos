@@ -2,3 +2,6 @@
 edition = "2021"
 name = "cpu"
 version = "0.1.0"
+
+[dependencies]
+kstd = { path = "../kstd" }
