@@ -13,7 +13,7 @@
 
 use kstd::memory::PA;
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct GAS {
     pub address_space_id: u8,
     pub register_bit_width: u8,
@@ -22,7 +22,7 @@ pub struct GAS {
     pub address: PA,
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct RSDP {
     pub signature: [u8; 8],
     pub checksum: u8,
@@ -35,7 +35,7 @@ pub struct RSDP {
     reserved: [u8; 3],
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct DESCRIPTION_HEADER {
     pub signature: [u8; 4],
     pub length: u32,
@@ -48,7 +48,7 @@ pub struct DESCRIPTION_HEADER {
     pub creator_revision: u32,
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct XSDT {
     pub header: DESCRIPTION_HEADER,
     pub entry: [u8; 0],
@@ -57,7 +57,7 @@ pub struct XSDT {
 // learn.microsoft.com
 // -------------------
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct SPCR {
     pub header: DESCRIPTION_HEADER,
     pub interface_type: u8,
