@@ -42,7 +42,7 @@ impl TranslationTable {
         *desc = Descriptor::page(pa);
     }
 
-    fn get_descriptor<'a>(&'a mut self, va: VA, level: usize) -> &'a mut Descriptor {
+    fn get_descriptor(&mut self, va: VA, level: usize) -> &mut Descriptor {
         let table_index = |va: VA, lvl: usize| {
             let shift = 39 - 9 * lvl;
             (usize::from(va) >> shift) & 0x1ff

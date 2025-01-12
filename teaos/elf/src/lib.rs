@@ -6,8 +6,8 @@ extern crate alloc;
 
 use alloc::vec;
 use alloc::vec::Vec;
-use kstd::memory::VA;
 use core::mem;
+use kstd::memory::VA;
 
 use kstd::io::{Read, Seek};
 
@@ -31,7 +31,7 @@ impl<R: Read + Seek> ElfFile<R> {
     }
 
     pub fn program_headers(&mut self) -> Vec<Phdr> {
-        self.reader.seek(self.header.phoff as u64).unwrap();
+        self.reader.seek(self.header.phoff).unwrap();
 
         let mut buffer = vec![0; mem::size_of::<Phdr>()];
         (0..self.header.phnum)
@@ -73,7 +73,7 @@ impl Ehdr {
     /// Parse the given raw data as a [`Phdr`].
     ///
     /// # Panics
-    /// 
+    ///
     /// Panics if `data` has the wrong size of alignment.
     /// Panics if any of the header fields have unexpected values.
     fn parse(data: &[u8]) -> Self {
@@ -115,7 +115,7 @@ impl Phdr {
     /// Parse the given raw data as a [`Phdr`].
     ///
     /// # Panics
-    /// 
+    ///
     /// Panics if `data` has the wrong size of alignment.
     fn parse(data: &[u8]) -> Self {
         assert_eq!(data.len(), mem::size_of::<Phdr>());

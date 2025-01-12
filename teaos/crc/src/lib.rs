@@ -15,7 +15,7 @@ pub fn crc32(data: &[u8]) -> u32 {
 pub struct Crc32(u32);
 
 impl Crc32 {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self(0xffffffff)
     }
 
@@ -26,6 +26,12 @@ impl Crc32 {
 
     pub fn finish(self) -> u32 {
         !self.0
+    }
+}
+
+impl Default for Crc32 {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

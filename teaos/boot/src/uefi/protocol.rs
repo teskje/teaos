@@ -139,7 +139,7 @@ impl Seek for File {
     fn seek(&mut self, pos: u64) -> Result<(), io::Error> {
         let set_position = unsafe { (**self.ptr).set_position };
 
-        let status = set_position(*self.ptr, pos as u64);
+        let status = set_position(*self.ptr, pos);
         assert_eq!(status, sys::SUCCESS);
 
         Ok(())

@@ -29,6 +29,12 @@ impl Lock {
     }
 }
 
+impl Default for Lock {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// A wrapper that ensures exclusive access to the wrapped data.
 pub struct Mutex<T> {
     data: UnsafeCell<T>,

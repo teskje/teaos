@@ -94,7 +94,8 @@ impl TryFrom<uefi::sys::MEMORY_TYPE> for MemoryType {
             | RuntimeServicesData => Ok(MemoryType::Loader),
             ACPIReclaimMemory | ACPIMemoryNVS => Ok(MemoryType::Acpi),
             MemoryMappedIO | MemoryMappedIOPortSpace => Ok(MemoryType::Mmio),
-            ReservedMemoryType | UnusableMemory | PalCode | UnacceptedMemoryType | _ => Err(()),
+            ReservedMemoryType | UnusableMemory | PalCode | UnacceptedMemoryType => Err(()),
+            _ => Err(()),
         }
     }
 }

@@ -67,7 +67,7 @@ fn load_kernel() -> (fn(&BootInfo) -> !, TranslationTable) {
     let mut elf = ElfFile::open(kernel_file);
 
     let entry = elf.entry();
-    let entry = unsafe { mem::transmute(entry) };
+    let entry = unsafe { mem::transmute::<usize, fn(&BootInfo) -> !>(entry) };
 
     let mut page_table = TranslationTable::new();
     let phdrs = elf.program_headers();

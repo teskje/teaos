@@ -6,6 +6,7 @@
 
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
+#![allow(clippy::upper_case_acronyms)]
 
 // 5.2 ACPI System Description Tables
 // ----------------------------------

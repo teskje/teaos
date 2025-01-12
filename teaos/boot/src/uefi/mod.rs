@@ -170,7 +170,7 @@ impl ConfigTable {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (sys::GUID, *mut c_void)> + '_ {
-        (0..self.len).into_iter().map(|i| unsafe {
+        (0..self.len).map(|i| unsafe {
             let ptr = self.ptr.add(i);
             ((*ptr).vendor_guid, (*ptr).vendor_table)
         })

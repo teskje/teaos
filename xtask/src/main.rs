@@ -278,6 +278,7 @@ fn create_esp_image(img_path: &Path, boot_bin: &Path, kernel_bin: &Path) -> anyh
         .read(true)
         .write(true)
         .create(true)
+        .truncate(true)
         .open(img_path)?;
 
     // File the image file with `DISK_SIZE` zero bytes.
