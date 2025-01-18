@@ -7,7 +7,7 @@ impl Esr {
     pub fn load() -> Self {
         let esr: u64;
         unsafe {
-            asm!("MRS {x}, ESR_EL1", x = out(reg) esr);
+            asm!("mrs {x}, esr_el1", x = out(reg) esr);
         }
 
         Self(esr)
@@ -44,7 +44,7 @@ impl From<u8> for ExcClass {
     fn from(ec: u8) -> Self {
         match ec {
             0b111100 => Self::Brk,
-            other => Self::Other(other)
+            other => Self::Other(other),
         }
     }
 }

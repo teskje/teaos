@@ -76,7 +76,7 @@ impl TranslationTable {
 
         let mut tcr: u64;
         unsafe {
-            asm!("MRS {x}, TCR_EL1", x = out(reg) tcr);
+            asm!("mrs {x}, tcr_el1", x = out(reg) tcr);
         };
 
         // TCR.T1SZ = 16
@@ -96,9 +96,9 @@ impl TranslationTable {
 
         unsafe {
             asm!(
-                "MSR TTBR1_EL1, {ttb}",
-                "MSR TCR_EL1, {tcr}",
-                "ISB",
+                "msr ttbr1_el1, {ttb}",
+                "msr tcr_el1, {tcr}",
+                "isb",
                 ttb = in(reg) ttb,
                 tcr = in(reg) tcr,
             );

@@ -22,8 +22,8 @@ pub fn init() {
 
     unsafe {
         asm!(
-            "MSR VBAR_EL1, {addr}",
-            "ISB",
+            "msr vbar_el1, {addr}",
+            "isb",
             addr = in(reg) vector_base
         );
     }
@@ -39,7 +39,7 @@ pub extern "C" fn default_handler() {
 
     match esr.ec() {
         esr::ExcClass::Brk => handle_breakpoint(),
-        esr::ExcClass::Other(_) => panic!("unhandled exception, ESR = {esr:?}"),
+        esr::ExcClass::Other(_) => panic!("unhandled exception (esr={esr:?})"),
     }
 }
 
@@ -48,9 +48,9 @@ fn handle_breakpoint() {
 
     unsafe {
         asm!(
-            "MRS {x}, ELR_EL1",
-            "ADD {x}, {x}, #4",
-            "MSR ELR_EL1, {x}",
+            "mrs {x}, elr_el1",
+            "add {x}, {x}, #4",
+            "msr elr_el1, {x}",
             x = out(reg) _,
         );
     }

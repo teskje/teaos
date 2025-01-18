@@ -9,9 +9,9 @@ pub fn va_to_pa(va: VA) -> PA {
     let par: u64;
     unsafe {
         asm!(
-            "AT S1E1R, {va}",
-            "ISB",
-            "MRS {par}, PAR_EL1",
+            "at s1e1r, {va}",
+            "isb",
+            "mrs {par}, par_el1",
             va = in(reg) u64::from(va),
             par = out(reg) par,
         );
