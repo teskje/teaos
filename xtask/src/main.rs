@@ -38,6 +38,9 @@ struct QemuArgs {
     /// build in release mode
     #[argh(switch)]
     release: bool,
+    /// wait for a gdb connection on tcp::1234
+    #[argh(switch)]
+    gdb: bool,
 }
 
 /// Run TeaOS in AWS.
@@ -60,12 +63,12 @@ async fn main() -> anyhow::Result<()> {
     env::set_current_dir(repo_root)?;
 
     match args.task {
-        TaskArgs::Qemu(args) => task_qemu(args.release),
+        TaskArgs::Qemu(args) => task_qemu(args.release, args.gdb),
         TaskArgs::Aws(args) => task_aws(args.release, &args.s3_bucket).await,
     }
 }
 
-fn task_qemu(release: bool) -> anyhow::Result<()> {
+fn task_qemu(release: bool, gdb: bool) -> anyhow::Result<()> {
     println!("building boot.efi (release={release})");
     let boot_bin = build_boot(release)?;
     println!("building teaos (release={release})");
@@ -75,8 +78,8 @@ fn task_qemu(release: bool) -> anyhow::Result<()> {
     let esp_img = target_dir().join("esp.img");
     create_esp_image(&esp_img, &boot_bin, &kernel_bin)?;
 
-    Command::new("qemu-system-aarch64")
-        .args(["-machine", "virt"])
+    let mut cmd = Command::new("qemu-system-aarch64");
+    cmd.args(["-machine", "virt"])
         .args(["-cpu", "neoverse-n1"])
         .args(["-m", "512M"])
         .args([
@@ -84,9 +87,11 @@ fn task_qemu(release: bool) -> anyhow::Result<()> {
             "if=pflash,format=raw,readonly=on,file=/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
         ])
         .args(["-drive", &format!("format=raw,file={}", esp_img.display())])
-        .arg("-nographic")
-        .status()
-        .context("qemu-system-aarch64")?;
+        .arg("-nographic");
+    if gdb {
+        cmd.args(["-s", "-S"]);
+    }
+    cmd.status().context("qemu-system-aarch64")?;
 
     Ok(())
 }
