@@ -19,5 +19,5 @@ fn panic(panic: &PanicInfo<'_>) -> ! {
         println!("  in file '{}' at line {}", loc.file(), loc.line());
     }
 
-    cpu::halt();
+    aarch64::halt();
 }

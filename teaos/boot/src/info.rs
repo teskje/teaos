@@ -2,9 +2,8 @@
 
 use core::fmt;
 
+use aarch64::memory::{PA, PAGE_SIZE};
 use alloc::vec::Vec;
-use cpu::vmem::PAGE_SIZE;
-use kstd::memory::PA;
 
 use crate::uefi;
 

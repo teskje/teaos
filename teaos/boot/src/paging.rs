@@ -1,7 +1,6 @@
-use core::arch::asm;
-
-use cpu::vmem::PAGE_SIZE;
-use kstd::memory::{PA, VA};
+use aarch64::instruction::isb;
+use aarch64::memory::{PA, PAGE_SIZE, VA};
+use aarch64::register::{TCR_EL1, TTBR1_EL1};
 
 use crate::uefi;
 
@@ -73,36 +72,20 @@ impl TranslationTable {
     /// control over the system's translation tables.
     pub fn install(&self) {
         let ttb = self.level0.as_ptr() as u64;
+        let mut tcr = TCR_EL1::read();
 
-        let mut tcr: u64;
-        unsafe {
-            asm!("mrs {x}, tcr_el1", x = out(reg) tcr);
-        };
-
-        // TCR.T1SZ = 16
-        tcr &= !(0x3f << 16);
-        tcr |= 16 << 16;
-        // TCR.EPD1 = 0
-        tcr &= !(1 << 23);
-        // TCR.IRGN1 = 0b00 (normal memory, inner non-cacheable)
-        tcr &= !(0x3 << 24);
-        // TCR.ORGN1 = 0b00 (normal memory, outer non-cacheable)
-        tcr &= !(0x3 << 26);
-        // TCR.SH1 = 0b00 (non-shareable)
-        tcr &= !(0x3 << 28);
-        // TCR.TG1 = 0b10 (4KB)
-        tcr &= !(0x3 << 30);
-        tcr |= 0b10 << 30;
+        tcr.set_T1SZ(16);
+        tcr.set_EPD1(0);
+        tcr.set_IRGN1(0b00); // (normal memory, inner non-cacheable)
+        tcr.set_ORGN1(0b00); // (normal memory, inner non-cacheable)
+        tcr.set_SH1(0b00); // (non-shareable)
+        tcr.set_TG1(0b10); // (4 KiB)
 
         unsafe {
-            asm!(
-                "msr ttbr1_el1, {ttb}",
-                "msr tcr_el1, {tcr}",
-                "isb",
-                ttb = in(reg) ttb,
-                tcr = in(reg) tcr,
-            );
+            TTBR1_EL1::write(ttb);
+            TCR_EL1::write(tcr);
         }
+        isb();
     }
 }
 

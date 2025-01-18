@@ -1,7 +1,5 @@
-use kstd::memory::PA;
+use aarch64::memory::{PA, PAGE_SIZE};
 use kstd::sync::Mutex;
-
-use cpu::vmem::PAGE_SIZE;
 
 extern "C" {
     pub static __KERNEL_START: u8;

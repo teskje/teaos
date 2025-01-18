@@ -7,7 +7,6 @@ extern crate alloc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::mem;
-use kstd::memory::VA;
 
 use kstd::io::{Read, Seek};
 
@@ -130,8 +129,8 @@ impl Phdr {
         self.type_ == PT_LOAD
     }
 
-    pub fn virtual_address(&self) -> VA {
-        self.vaddr.into()
+    pub fn virtual_address(&self) -> u64 {
+        self.vaddr
     }
 
     pub fn memory_size(&self) -> u64 {

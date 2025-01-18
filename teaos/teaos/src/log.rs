@@ -41,7 +41,7 @@ pub fn write(args: fmt::Arguments) {
 #[macro_export]
 macro_rules! println {
     ($($arg:tt)*) => {{
-        let time = cpu::uptime();
+        let time = aarch64::uptime();
         let module = module_path!();
         $crate::log::write(format_args!("{time} [{module}] "));
         $crate::log::write(format_args!($($arg)*));

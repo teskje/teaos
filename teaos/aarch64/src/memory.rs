@@ -1,5 +1,11 @@
+use core::arch::asm;
 use core::fmt::{self, LowerHex};
 use core::ops::{Add, AddAssign};
+
+use crate::instruction::isb;
+use crate::register::PAR_EL1;
+
+pub const PAGE_SIZE: usize = 4 * (1 << 10);
 
 /// Type for physical memory addresses.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -171,4 +177,22 @@ impl AddAssign<usize> for VA {
     fn add_assign(&mut self, rhs: usize) {
         *self = *self + rhs;
     }
+}
+
+/// Translate the given virtual address to a physical address.
+pub fn va_to_pa(va: VA) -> PA {
+    unsafe {
+        asm!("at s1e1r, {x}", x = in(reg) u64::from(va));
+    }
+    isb();
+
+    let par = PAR_EL1::read();
+    if par.F() != 0 {
+        panic!(
+            "address translation failed\n\
+             PAR = {par:#?}"
+        );
+    }
+
+    PA::new(par.PA() << 12)
 }

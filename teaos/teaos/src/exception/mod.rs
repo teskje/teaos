@@ -1,8 +1,7 @@
-mod esr;
+use core::arch::global_asm;
 
-use core::arch::{asm, global_asm};
-
-use esr::Esr;
+use aarch64::instruction::isb;
+use aarch64::register::{ESR_EL1, VBAR_EL1};
 
 use crate::println;
 
@@ -15,15 +14,11 @@ global_asm!(include_str!("vector.S"));
 
 /// Initialize exception handling.
 pub fn init() {
-    let vector_base = unsafe { &EXCEPTION_VECTORS as *const _ as u64 };
-
     unsafe {
-        asm!(
-            "msr vbar_el1, {addr}",
-            "isb",
-            addr = in(reg) vector_base
-        );
+        let vector_base = &EXCEPTION_VECTORS as *const _ as u64;
+        VBAR_EL1::write(vector_base);
     }
+    isb();
 }
 
 #[derive(Debug)]
@@ -56,26 +51,26 @@ pub(super) struct ExceptionStack {
 
 #[no_mangle]
 pub extern "C" fn handle_unhandled(stack: &mut ExceptionStack) {
-    let esr = Esr::read();
+    let esr = ESR_EL1::read();
 
     panic!(
         "unhandled exception from EL1\n\
-         ESR = {esr:#x?}\n\
+         ESR = {esr:#?}\n\
          stack = {stack:#018x?}"
     );
 }
 
 #[no_mangle]
 pub extern "C" fn handle_exception_el1(stack: &mut ExceptionStack) {
-    let esr = Esr::read();
+    let esr = ESR_EL1::read();
 
-    match esr.ec() {
-        0x3c => handle_breakpoint(stack),
+    match esr.EC() {
+        0x3c => breakpoint(stack),
         _ => handle_unhandled(stack),
     }
 }
 
-fn handle_breakpoint(stack: &mut ExceptionStack) {
+fn breakpoint(stack: &mut ExceptionStack) {
     println!("skipping breakpoint");
     stack.elr += 4;
 }

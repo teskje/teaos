@@ -23,23 +23,19 @@ pub unsafe fn kernel(bootinfo: &BootInfo) -> ! {
     println!("initializing exception handling");
     exception::init();
 
-    println!("seeding page allocator with unused blocks");
+    println!("seeding frame allocator with unused blocks");
     for block in &bootinfo.memory.blocks {
         if block.type_ == info::MemoryType::Unused {
             free_frames(block.start, block.pages);
         }
     }
 
-    //unsafe {
-    //    *(0xdeadbeef as *mut u8) = 42;
-    //}
-
     // TODO
     //  - take over page tables
     //  - initialize stack
     //  - initialize heap
 
-    cpu::halt();
+    aarch64::halt();
 }
 
 unsafe fn init_logging(uart_info: &info::Uart) {

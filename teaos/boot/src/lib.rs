@@ -10,11 +10,11 @@ mod allocator;
 mod paging;
 mod uefi;
 
+use aarch64::memory::{PA, VA};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::mem;
-use kstd::memory::PA;
 
 use elf::ElfFile;
 
@@ -81,7 +81,7 @@ fn load_kernel() -> (fn(&BootInfo) -> !, TranslationTable) {
         elf.read_segment(&phdr, buffer);
 
         let pa = PA::new(buffer.as_ptr() as u64);
-        let va = phdr.virtual_address();
+        let va = VA::new(phdr.virtual_address());
         let size = buffer.len();
         page_table.map(va, pa, size);
         println!("  mapped {va:#} -> {pa:#} ({size:#x} bytes)");

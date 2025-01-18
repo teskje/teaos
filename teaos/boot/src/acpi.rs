@@ -11,7 +11,7 @@
 // 5.2 ACPI System Description Tables
 // ----------------------------------
 
-use kstd::memory::PA;
+use aarch64::memory::PA;
 
 #[repr(C, packed)]
 pub struct GAS {
