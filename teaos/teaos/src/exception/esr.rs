@@ -4,7 +4,7 @@ use core::fmt;
 pub(super) struct Esr(u64);
 
 impl Esr {
-    pub fn load() -> Self {
+    pub fn read() -> Self {
         let esr: u64;
         unsafe {
             asm!("mrs {x}, esr_el1", x = out(reg) esr);
@@ -13,9 +13,9 @@ impl Esr {
         Self(esr)
     }
 
-    pub fn ec(&self) -> ExcClass {
+    pub fn ec(&self) -> u8 {
         let ec = (self.0 >> 26) & 0x3f;
-        ExcClass::from(ec as u8)
+        ec as u8
     }
 
     fn iss(&self) -> u32 {
@@ -28,23 +28,8 @@ impl fmt::Debug for Esr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ESR")
             .field("raw", &format_args!("{:#x}", self.0))
-            .field("ec", &format_args!("{:?}", self.ec()))
+            .field("ec", &format_args!("{:#x}", self.ec()))
             .field("iss", &format_args!("{:#x}", self.iss()))
             .finish()
-    }
-}
-
-#[derive(Debug)]
-pub(super) enum ExcClass {
-    Brk,
-    Other(u8),
-}
-
-impl From<u8> for ExcClass {
-    fn from(ec: u8) -> Self {
-        match ec {
-            0b111100 => Self::Brk,
-            other => Self::Other(other),
-        }
     }
 }

@@ -11,9 +11,6 @@ extern "C" {
     static EXCEPTION_VECTORS: u8;
 }
 
-#[no_mangle]
-static mut OVERFLOW_STACK: [u8; 4096] = [0; 4096];
-
 global_asm!(include_str!("vector.S"));
 
 /// Initialize exception handling.
@@ -27,31 +24,58 @@ pub fn init() {
             addr = in(reg) vector_base
         );
     }
+}
 
-    unsafe {
-        asm!("brk 1");
-    }
+#[derive(Debug)]
+#[repr(C, packed)]
+pub(super) struct ExceptionStack {
+    spsr: u64,
+    elr: u64,
+
+    x0: u64,
+    x1: u64,
+    x2: u64,
+    x3: u64,
+    x4: u64,
+    x5: u64,
+    x6: u64,
+    x7: u64,
+    x8: u64,
+    x9: u64,
+    x10: u64,
+    x11: u64,
+    x12: u64,
+    x13: u64,
+    x14: u64,
+    x15: u64,
+    x16: u64,
+    x17: u64,
+    x18: u64,
+    x30: u64,
 }
 
 #[no_mangle]
-pub extern "C" fn default_handler() {
-    let esr = Esr::load();
+pub extern "C" fn handle_unhandled(stack: &mut ExceptionStack) {
+    let esr = Esr::read();
+
+    panic!(
+        "unhandled exception from EL1\n\
+         ESR = {esr:#x?}\n\
+         stack = {stack:#018x?}"
+    );
+}
+
+#[no_mangle]
+pub extern "C" fn handle_exception_el1(stack: &mut ExceptionStack) {
+    let esr = Esr::read();
 
     match esr.ec() {
-        esr::ExcClass::Brk => handle_breakpoint(),
-        esr::ExcClass::Other(_) => panic!("unhandled exception (esr={esr:?})"),
+        0x3c => handle_breakpoint(stack),
+        _ => handle_unhandled(stack),
     }
 }
 
-fn handle_breakpoint() {
-    println!("handling breakpoint exception");
-
-    unsafe {
-        asm!(
-            "mrs {x}, elr_el1",
-            "add {x}, {x}, #4",
-            "msr elr_el1, {x}",
-            x = out(reg) _,
-        );
-    }
+fn handle_breakpoint(stack: &mut ExceptionStack) {
+    println!("skipping breakpoint");
+    stack.elr += 4;
 }
