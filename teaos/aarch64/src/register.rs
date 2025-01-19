@@ -38,12 +38,14 @@ macro_rules! system_register {
             paste! {
                 $(
                     #[allow(non_snake_case)]
+                    #[allow(clippy::eq_op, clippy::identity_op)]
                     pub fn $field(&self) -> u64 {
                         let mask = 2u64.wrapping_shl($b - $a).wrapping_sub(1);
                         (self.0 >> $a) & mask
                     }
 
                     #[allow(non_snake_case)]
+                    #[allow(clippy::eq_op, clippy::identity_op)]
                     pub fn [<set_ $field>](&mut self, x: u64) {
                         let mask = 2u64.wrapping_shl($b - $a).wrapping_sub(1);
                         assert!(x <= mask);

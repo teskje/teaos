@@ -1,11 +1,11 @@
+pub mod paging;
+
 use core::arch::asm;
 use core::fmt::{self, LowerHex};
 use core::ops::{Add, AddAssign};
 
 use crate::instruction::isb;
 use crate::register::PAR_EL1;
-
-pub const PAGE_SIZE: usize = 4 * (1 << 10);
 
 /// Type for physical memory addresses.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -104,6 +104,10 @@ impl VA {
         usize::from(*self) % x == 0
     }
 
+    pub fn as_ptr<T>(&self) -> *const T {
+        usize::from(*self) as *const _
+    }
+
     pub fn as_mut_ptr<T>(&self) -> *mut T {
         usize::from(*self) as *mut _
     }
@@ -181,8 +185,9 @@ impl AddAssign<usize> for VA {
 
 /// Translate the given virtual address to a physical address.
 pub fn va_to_pa(va: VA) -> PA {
+    let va = u64::from(va);
     unsafe {
-        asm!("at s1e1r, {x}", x = in(reg) u64::from(va));
+        asm!("at s1e1r, {x}", x = in(reg) va);
     }
     isb();
 
@@ -194,5 +199,6 @@ pub fn va_to_pa(va: VA) -> PA {
         );
     }
 
-    PA::new(par.PA() << 12)
+    let pa = (par.PA() << 12) | (va & 0xfff);
+    PA::new(pa)
 }

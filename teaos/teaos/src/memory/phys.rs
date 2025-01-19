@@ -1,4 +1,5 @@
-use aarch64::memory::{PA, PAGE_SIZE};
+use aarch64::memory::paging::PAGE_SIZE;
+use aarch64::memory::PA;
 use kstd::sync::Mutex;
 
 static FRAME_ALLOCATOR: Mutex<FrameAllocator> = Mutex::new(FrameAllocator::new());

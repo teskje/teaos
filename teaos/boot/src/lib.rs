@@ -7,9 +7,9 @@ pub mod log;
 
 mod acpi;
 mod allocator;
-mod paging;
 mod uefi;
 
+use aarch64::memory::paging::TranslationTable;
 use aarch64::memory::{PA, VA};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -19,7 +19,6 @@ use core::mem;
 use elf::ElfFile;
 
 use crate::info::BootInfo;
-use crate::paging::TranslationTable;
 
 /// # Safety
 ///
@@ -32,7 +31,7 @@ pub fn load() -> ! {
     println!("entered UEFI boot loader");
 
     println!("loading kernel binary");
-    let (kernel_start, page_table) = load_kernel();
+    let (kernel_start, kernel_tt) = load_kernel();
     println!("  kernel_start={kernel_start:#?}");
 
     println!("retrieving ACPI RSDP pointer");
@@ -49,7 +48,7 @@ pub fn load() -> ! {
     // No (de)allocating or logging beyond this point!
     // We have lost access to the boot services and any attempt to invoke one will panic.
 
-    page_table.install();
+    kernel_tt.load();
 
     let bootinfo = BootInfo {
         memory: memory_info,
@@ -69,7 +68,12 @@ fn load_kernel() -> (fn(&BootInfo) -> !, TranslationTable) {
     let entry = elf.entry();
     let entry = unsafe { mem::transmute::<usize, fn(&BootInfo) -> !>(entry) };
 
-    let mut page_table = TranslationTable::new();
+    let alloc_frame = || {
+        let buffer = uefi::allocate_page();
+        PA::new(buffer.as_mut_ptr() as u64)
+    };
+
+    let mut page_table = TranslationTable::new(VA::new(0), alloc_frame);
     let phdrs = elf.program_headers();
     for phdr in phdrs {
         if !phdr.is_load() {
@@ -83,7 +87,7 @@ fn load_kernel() -> (fn(&BootInfo) -> !, TranslationTable) {
         let pa = PA::new(buffer.as_ptr() as u64);
         let va = VA::new(phdr.virtual_address());
         let size = buffer.len();
-        page_table.map(va, pa, size);
+        page_table.map_region(va, pa, size, alloc_frame);
         println!("  mapped {va:#} -> {pa:#} ({size:#x} bytes)");
     }
 

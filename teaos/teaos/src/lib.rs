@@ -22,11 +22,6 @@ pub unsafe fn kernel(bootinfo: &BootInfo) -> ! {
     exception::init();
     memory::init(&bootinfo.memory);
 
-    // TODO
-    //  - take over page tables
-    //  - initialize stack
-    //  - initialize heap
-
     aarch64::halt();
 }
 

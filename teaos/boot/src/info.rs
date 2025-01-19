@@ -2,7 +2,8 @@
 
 use core::fmt;
 
-use aarch64::memory::{PA, PAGE_SIZE};
+use aarch64::memory::paging::PAGE_SIZE;
+use aarch64::memory::PA;
 use alloc::vec::Vec;
 
 use crate::uefi;
@@ -55,13 +56,14 @@ pub struct MemoryBlock {
 pub enum MemoryType {
     /// Unused memory: can be freely used.
     Unused,
-    /// Memory used by the boot loader: can be reclaimed once the kernel has fully taken over.
+    /// Memory used by the boot loader: can be reclaimed once the kernel has fully taken over
+    /// memory management.
     ///
     /// Usage of this memory type includes, but is not limited to:
     ///  * the `BootInfo`
     ///  * the initial stack
     ///  * the initial page tables
-    Loader,
+    Boot,
     /// Memory containing ACPI structures.
     Acpi,
     /// Memory containing memory-maped I/O registers.
@@ -72,7 +74,7 @@ impl fmt::Display for MemoryType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             Self::Unused => "unused",
-            Self::Loader => "loader",
+            Self::Boot => "loader",
             Self::Acpi => "acpi",
             Self::Mmio => "mmio",
         };
@@ -90,7 +92,7 @@ impl TryFrom<uefi::sys::MEMORY_TYPE> for MemoryType {
         match type_ {
             ConventionalMemory | PersistentMemory => Ok(MemoryType::Unused),
             LoaderCode | LoaderData | BootServicesCode | BootServicesData | RuntimeServicesCode
-            | RuntimeServicesData => Ok(MemoryType::Loader),
+            | RuntimeServicesData => Ok(MemoryType::Boot),
             ACPIReclaimMemory | ACPIMemoryNVS => Ok(MemoryType::Acpi),
             MemoryMappedIO | MemoryMappedIOPortSpace => Ok(MemoryType::Mmio),
             ReservedMemoryType | UnusableMemory | PalCode | UnacceptedMemoryType => Err(()),
