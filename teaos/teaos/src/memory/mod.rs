@@ -1,40 +1,28 @@
 mod phys;
+mod virt;
 
-use aarch64::memory::paging::TranslationTable;
+use aarch64::memory::paging::{TranslationTable, PAGE_SIZE};
 use aarch64::memory::{PA, VA};
 use aarch64::register::TTBR1_EL1;
 use boot::info;
 use phys::{alloc_frame, free_frames};
+use virt::PHYS_START;
 
 use crate::println;
-
-extern "C" {
-    static __KERNEL_START: u8;
-    static __KERNEL_END: u8;
-
-    static __STACK_START: u8;
-    static __STACK_END: u8;
-
-    static __HEAP_START: u8;
-    static __HEAP_END: u8;
-
-    static __LINEAR_REGION_START: u8;
-}
 
 pub unsafe fn init(info: &info::Memory) {
     println!("initializing memory management");
 
-    println!("seeding frame allocator with unused blocks");
+    println!("  seeding frame allocator with unused blocks");
     for block in &info.blocks {
         if block.type_ == info::MemoryType::Unused {
             free_frames(block.start, block.pages);
         }
     }
 
-    init_translation_tables();
-    map_physical_memory(info);
+    init_translation_tables(info);
 
-    println!("reclaiming boot memory blocks");
+    println!("  reclaiming boot memory blocks");
     for block in &info.blocks {
         if block.type_ == info::MemoryType::Boot {
             free_frames(block.start, block.pages);
@@ -42,8 +30,8 @@ pub unsafe fn init(info: &info::Memory) {
     }
 }
 
-fn init_translation_tables() {
-    println!("initializing kernel translation tables");
+fn init_translation_tables(info: &info::Memory) {
+    println!("  initializing kernel translation tables");
 
     let phys_offset = VA::new(0);
 
@@ -53,7 +41,17 @@ fn init_translation_tables() {
 
     let mut kernel_tt = TranslationTable::new(phys_offset, alloc_frame);
     kernel_tt.clone_from(&boot_tt, alloc_frame);
+
+    for block in &info.blocks {
+        let start_pa = block.start;
+        let start_va = pa_to_va(start_pa);
+        let size = block.pages * PAGE_SIZE;
+        kernel_tt.map_region(start_va, start_pa, size, alloc_frame);
+    }
+
     kernel_tt.load();
 }
 
-fn map_physical_memory(info: &info::Memory) {}
+fn pa_to_va(pa: PA) -> VA {
+    PHYS_START + u64::from(pa)
+}
