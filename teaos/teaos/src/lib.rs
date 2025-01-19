@@ -8,7 +8,6 @@ mod uart;
 
 use boot::info::{self, BootInfo};
 
-use crate::memory::free_frames;
 use crate::uart::Uart;
 
 /// # Safety
@@ -20,15 +19,8 @@ pub unsafe fn kernel(bootinfo: &BootInfo) -> ! {
 
     print_bootinfo(bootinfo);
 
-    println!("initializing exception handling");
     exception::init();
-
-    println!("seeding frame allocator with unused blocks");
-    for block in &bootinfo.memory.blocks {
-        if block.type_ == info::MemoryType::Unused {
-            free_frames(block.start, block.pages);
-        }
-    }
+    memory::init(&bootinfo.memory);
 
     // TODO
     //  - take over page tables

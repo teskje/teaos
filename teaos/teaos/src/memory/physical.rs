@@ -1,19 +1,6 @@
 use aarch64::memory::{PA, PAGE_SIZE};
 use kstd::sync::Mutex;
 
-extern "C" {
-    pub static __KERNEL_START: u8;
-    pub static __KERNEL_END: u8;
-
-    pub static __STACK_START: u8;
-    pub static __STACK_END: u8;
-
-    pub static __HEAP_START: u8;
-    pub static __HEAP_END: u8;
-
-    pub static __LINEAR_REGION_START: u8;
-}
-
 static FRAME_ALLOCATOR: Mutex<FrameAllocator> = Mutex::new(FrameAllocator::new());
 
 /// An allocator for page frames.
@@ -62,7 +49,7 @@ impl FrameAllocator {
 }
 
 /// Allocate a page frame.
-pub fn alloc_frame() -> PA {
+pub(super) fn alloc_frame() -> PA {
     FRAME_ALLOCATOR.lock().alloc()
 }
 
@@ -71,7 +58,7 @@ pub fn alloc_frame() -> PA {
 /// # Safety
 ///
 /// `pa` must point to an unused page frame.
-pub unsafe fn free_frame(pa: PA) {
+pub(super) unsafe fn free_frame(pa: PA) {
     FRAME_ALLOCATOR.lock().free(pa);
 }
 
@@ -80,7 +67,7 @@ pub unsafe fn free_frame(pa: PA) {
 /// # Safety
 ///
 /// `pa` must point to a range of `count` unused page frames.
-pub unsafe fn free_frames(mut pa: PA, count: usize) {
+pub(super) unsafe fn free_frames(mut pa: PA, count: usize) {
     for _ in 0..count {
         free_frame(pa);
         pa += PAGE_SIZE;

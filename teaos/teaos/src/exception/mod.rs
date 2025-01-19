@@ -14,6 +14,8 @@ global_asm!(include_str!("vector.S"));
 
 /// Initialize exception handling.
 pub fn init() {
+    println!("initializing exception handling");
+
     unsafe {
         let vector_base = &EXCEPTION_VECTORS as *const _ as u64;
         VBAR_EL1::write(vector_base);
