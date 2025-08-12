@@ -1,3 +1,5 @@
+//! Memory management support.
+
 mod phys;
 mod virt;
 

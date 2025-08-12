@@ -1,3 +1,9 @@
+//! The TeaOS boot loader.
+//!
+//! The boot loader is really just a thin shim between UEFI and the TeaOS kernel. It presents as a
+//! UEFI application that loads the kernel from the boot disk, collects information about the
+//! system required for the kernel to boot, then exits boot services and jumps into the kernel.
+
 #![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
@@ -20,6 +26,8 @@ use elf::ElfFile;
 
 use crate::info::BootInfo;
 
+/// Initialize the UEFI wrapper.
+///
 /// # Safety
 ///
 /// `system_table` must be a valid pointer to a [`sys::SYSTEM_TABLE`].
@@ -27,6 +35,10 @@ pub unsafe fn init_uefi(image_handle: *mut c_void, system_table: *mut c_void) {
     uefi::init(image_handle, system_table.cast());
 }
 
+/// Run the boot loader.
+///
+/// This loads the kernel binary, retrieves all required boot information, and finally passes
+/// control to the kernel.
 pub fn load() -> ! {
     println!("entered UEFI boot loader");
 
@@ -58,6 +70,11 @@ pub fn load() -> ! {
     kernel_start(&bootinfo);
 }
 
+/// Load the kernel binary.
+///
+/// The kernel binary is expected to be located in the boot file system at `\kernel`, and is
+/// expected to be an ELF file. Its loadable segments are read into memory and mapped into the
+/// returned page table.
 fn load_kernel() -> (fn(&BootInfo) -> !, TranslationTable) {
     let boot_fs = uefi::get_boot_fs();
     let root = boot_fs.open_volume();
@@ -94,6 +111,11 @@ fn load_kernel() -> (fn(&BootInfo) -> !, TranslationTable) {
     (entry, page_table)
 }
 
+/// Find the ACPI RSDP in the UEFI config table.
+///
+/// # Panics
+///
+/// Panics if no RSDP entry is found.
 fn find_acpi_rsdp() -> *mut acpi::RSDP {
     for (guid, ptr) in uefi::config_table().iter() {
         if guid == uefi::sys::ACPI_TABLE_GUID {
@@ -104,6 +126,10 @@ fn find_acpi_rsdp() -> *mut acpi::RSDP {
     panic!("ACPI config table not found");
 }
 
+/// Retrieve information about the serial port.
+///
+/// Finds the SPCR in the ACPI tables and extracts the UART type and base address.
+///
 /// # Safety
 ///
 /// `rsdp` must be a valid pointer to an [`acpi::RSDP`].
@@ -146,6 +172,9 @@ unsafe fn find_uart(rsdp: *mut acpi::RSDP) -> info::Uart {
     }
 }
 
+/// Exit the UEFI boot services.
+///
+/// Returns information about the physical memory in the system.
 fn exit_boot_services() -> info::Memory {
     let (buffer_size, desc_size) = uefi::get_memory_map_size();
     let len = buffer_size / desc_size;

@@ -1,3 +1,5 @@
+//! The TeaOS kernel.
+
 #![cfg_attr(not(test), no_std)]
 
 pub mod log;
@@ -10,6 +12,8 @@ use boot::info::{self, BootInfo};
 
 use crate::uart::Uart;
 
+/// The kernel entry point.
+///
 /// # Safety
 ///
 /// The provided `bootinfo` must contain correct memory addresses.

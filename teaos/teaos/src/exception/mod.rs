@@ -1,3 +1,5 @@
+//! Exception handling support.
+
 use core::arch::global_asm;
 
 use aarch64::instruction::isb;

@@ -10,8 +10,14 @@ use crate::uefi;
 
 #[derive(Debug)]
 pub struct BootInfo {
+    /// Map of physical memory blocks and their usage.
     pub memory: Memory,
+    /// Info about the UART device that provides the serial console.
+    ///
+    /// This information can be retrieved from the ACPI structures, but the boot loader provides it
+    /// separately so the kernel can set up serial output as quickly as possible.
     pub uart: Uart,
+    /// Address of the ACPI RSDP structure.
     pub acpi_rsdp: PA,
 }
 

@@ -1,3 +1,5 @@
+//! A `GlobalAlloc` implementation deferring to UEFI memory boot services.
+
 use core::alloc::{GlobalAlloc, Layout};
 
 use crate::uefi;

@@ -1,3 +1,5 @@
+//! Simple drivers for supported UART devices.
+
 use core::ffi::c_void;
 use core::fmt;
 

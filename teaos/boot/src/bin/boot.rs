@@ -1,3 +1,5 @@
+//! UEFI entry point for the TeaOS boot loader.
+
 #![no_std]
 #![no_main]
 

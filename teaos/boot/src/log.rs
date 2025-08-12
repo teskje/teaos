@@ -1,3 +1,5 @@
+//! Print logging support.
+
 use core::fmt;
 
 use crate::uefi;
