@@ -3,7 +3,7 @@
 use core::arch::global_asm;
 
 use aarch64::instruction::isb;
-use aarch64::register::{ESR_EL1, VBAR_EL1};
+use aarch64::register::{ESR_EL1, FAR_EL1, VBAR_EL1};
 
 use crate::println;
 
@@ -56,10 +56,12 @@ pub(super) struct ExceptionStack {
 #[no_mangle]
 pub extern "C" fn handle_unhandled(stack: &mut ExceptionStack) {
     let esr = ESR_EL1::read();
+    let far = FAR_EL1::read();
 
     panic!(
         "unhandled exception from EL1\n\
          ESR = {esr:#?}\n\
+         FAR = {far:#?}\n\
          stack = {stack:#018x?}"
     );
 }

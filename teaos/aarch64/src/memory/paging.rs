@@ -8,19 +8,23 @@ pub const PAGE_SIZE: usize = 4 * (1 << 10);
 
 const TABLE_LEN: usize = PAGE_SIZE / mem::size_of::<Descriptor>();
 
+/// A translation table abstraction.
+///
+/// Currently supports only high-memory translation, i.e., the translation table is expected to be
+/// loaded into TTBR1, rather than TTBR0. Once we implement user mode we'll want to change this.
 pub struct TranslationTable {
     base: PA,
-    phys_offset: VA,
+    phys_start: VA,
 }
 
 impl TranslationTable {
-    pub fn new(phys_offset: VA, alloc_frame: impl Fn() -> PA) -> Self {
+    pub fn new(phys_start: VA, alloc_frame: impl Fn() -> PA) -> Self {
         let ttb = alloc_frame();
-        Self::with_base(ttb, phys_offset)
+        Self::with_base(ttb, phys_start)
     }
 
-    pub fn with_base(base: PA, phys_offset: VA) -> Self {
-        Self { base, phys_offset }
+    pub fn with_base(base: PA, phys_start: VA) -> Self {
+        Self { base, phys_start }
     }
 
     pub fn map_page(&mut self, va: VA, pa: PA, alloc_frame: impl Fn() -> PA) {
@@ -54,12 +58,12 @@ impl TranslationTable {
     }
 
     unsafe fn table_at(&self, pa: PA) -> &Table {
-        let va = self.phys_offset + u64::from(pa);
+        let va = self.phys_start + u64::from(pa);
         unsafe { &*va.as_ptr() }
     }
 
     unsafe fn table_at_mut(&mut self, pa: PA) -> &mut Table {
-        let va = self.phys_offset + u64::from(pa);
+        let va = self.phys_start + u64::from(pa);
         unsafe { &mut *va.as_mut_ptr() }
     }
 
@@ -146,7 +150,7 @@ impl TranslationTable {
         });
     }
 
-    /// Load this translation table.
+    /// Load this translation table into TTBR1.
     pub fn load(&self) {
         let mut tcr = TCR_EL1::read();
         tcr.set_T1SZ(16);

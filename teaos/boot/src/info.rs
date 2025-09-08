@@ -112,3 +112,11 @@ pub enum Uart {
     Pl011 { base: PA },
     Uart16550 { base: PA },
 }
+
+impl Uart {
+    pub fn base(&self) -> PA {
+        match self {
+            Self::Pl011 { base } | Self::Uart16550 { base } => *base,
+        }
+    }
+}

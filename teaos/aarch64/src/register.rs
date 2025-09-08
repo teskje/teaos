@@ -96,6 +96,10 @@ system_register!(ESR_EL1,
     ISS2[32:55],
 );
 
+system_register!(FAR_EL1,
+    VA[0:63],
+);
+
 system_register!(PAR_EL1,
     F[0:0],
     PA[12:47],

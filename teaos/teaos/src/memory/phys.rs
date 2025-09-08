@@ -1,6 +1,8 @@
 use aarch64::memory::paging::PAGE_SIZE;
-use aarch64::memory::PA;
+use aarch64::memory::{PA, VA};
 use kstd::sync::Mutex;
+
+use crate::memory::pa_to_va;
 
 static FRAME_ALLOCATOR: Mutex<FrameAllocator> = Mutex::new(FrameAllocator::new());
 
@@ -19,11 +21,13 @@ impl FrameAllocator {
             panic!("no free frames left to allocate");
         };
 
-        let next_pa = unsafe { pa.as_mut_ptr::<PA>().read() };
+        let va = pa_to_va(pa);
+
+        let next_pa = unsafe { va.as_mut_ptr::<PA>().read() };
         self.freelist = Some(next_pa);
 
         unsafe {
-            fill_frame(pa, 0x00);
+            fill_frame(va, 0x00);
         }
 
         pa
@@ -38,12 +42,14 @@ impl FrameAllocator {
             "pa {pa:#} not aligned to page size"
         );
 
+        let va = pa_to_va(pa);
+
         // Fill the frame with garbage, to help catch UAF bugs.
-        fill_frame(pa, 0xab);
+        fill_frame(va, 0xab);
 
         // Insert the frame into the freelist.
         let next_pa = self.freelist.unwrap_or(PA::new(0));
-        pa.as_mut_ptr::<PA>().write(next_pa);
+        va.as_mut_ptr::<PA>().write(next_pa);
 
         self.freelist = Some(pa);
     }
@@ -78,7 +84,7 @@ pub(super) unsafe fn free_frames(mut pa: PA, count: usize) {
 /// # Safety
 ///
 /// `pa` must point to an unused page frame.
-unsafe fn fill_frame(pa: PA, fill: u8) {
-    let frame = &mut *pa.as_mut_ptr::<[u8; PAGE_SIZE]>();
+unsafe fn fill_frame(va: VA, fill: u8) {
+    let frame = &mut *va.as_mut_ptr::<[u8; PAGE_SIZE]>();
     frame.fill(fill);
 }
