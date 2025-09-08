@@ -6,6 +6,7 @@ extern crate alloc;
 
 use alloc::vec;
 use alloc::vec::Vec;
+use core::ffi::CStr;
 use core::mem;
 
 use kstd::io::{Read, Seek};
@@ -29,16 +30,24 @@ impl<R: Read + Seek> ElfFile<R> {
         self.header.entry as usize
     }
 
-    pub fn program_headers(&mut self) -> Vec<Phdr> {
+    pub fn program_headers(&mut self) -> impl Iterator<Item = Phdr> + '_ {
         self.reader.seek(self.header.phoff).unwrap();
 
         let mut buffer = vec![0; mem::size_of::<Phdr>()];
-        (0..self.header.phnum)
-            .map(move |_| {
-                self.reader.read_exact(&mut buffer).unwrap();
-                Phdr::parse(&buffer)
-            })
-            .collect()
+        (0..self.header.phnum).map(move |_| {
+            self.reader.read_exact(&mut buffer).unwrap();
+            Phdr::parse(&buffer)
+        })
+    }
+
+    pub fn section_headers(&mut self) -> impl Iterator<Item = Shdr> + '_ {
+        self.reader.seek(self.header.shoff).unwrap();
+
+        let mut buffer = vec![0; mem::size_of::<Shdr>()];
+        (0..self.header.shnum).map(move |_| {
+            self.reader.read_exact(&mut buffer).unwrap();
+            Shdr::parse(&buffer)
+        })
     }
 
     pub fn read_segment(&mut self, phdr: &Phdr, buffer: &mut [u8]) {
@@ -46,6 +55,46 @@ impl<R: Read + Seek> ElfFile<R> {
 
         self.reader.seek(phdr.offset).unwrap();
         self.reader.read_exact(buffer).unwrap();
+    }
+
+    pub fn read_section(&mut self, shdr: &Shdr, buffer: &mut [u8]) {
+        let buffer = &mut buffer[..shdr.size as usize];
+
+        self.reader.seek(shdr.offset).unwrap();
+        self.reader.read_exact(buffer).unwrap();
+    }
+
+    pub fn sh_symtab(&mut self) -> Option<Shdr> {
+        let sh = self.section_headers().find(|sh| sh.is_symtab())?;
+        assert_eq!(sh.entsize as usize, mem::size_of::<Sym>());
+        Some(sh)
+    }
+
+    pub fn symbols(&mut self) -> Option<impl Iterator<Item = Sym> + '_> {
+        let sh_symtab = self.sh_symtab()?;
+        let num_symbols = sh_symtab.size / sh_symtab.entsize;
+
+        self.reader.seek(sh_symtab.offset).unwrap();
+
+        let mut buffer = vec![0; mem::size_of::<Sym>()];
+        let iter = (0..num_symbols).map(move |_| {
+            self.reader.read_exact(&mut buffer).unwrap();
+            Sym::parse(&buffer)
+        });
+
+        Some(iter)
+    }
+
+    pub fn symbol_strtab(&mut self) -> Option<Vec<u8>> {
+        let sh_symtab = self.sh_symtab()?;
+        let strtab_idx = sh_symtab.link as usize;
+        let sh_strtab = self.section_headers().nth(strtab_idx)?;
+        assert_eq!(sh_strtab.type_, SHT_STRTAB);
+
+        let mut strtab = vec![0; sh_strtab.size as usize];
+        self.read_section(&sh_strtab, &mut strtab);
+
+        Some(strtab)
     }
 }
 
@@ -69,16 +118,16 @@ pub struct Ehdr {
 }
 
 impl Ehdr {
-    /// Parse the given raw data as a [`Phdr`].
+    /// Parse the given raw data as a [`Ehdr`].
     ///
     /// # Panics
     ///
-    /// Panics if `data` has the wrong size of alignment.
+    /// Panics if `data` has the wrong size or alignment.
     /// Panics if any of the header fields have unexpected values.
     fn parse(data: &[u8]) -> Self {
-        assert_eq!(data.len(), mem::size_of::<Ehdr>());
+        assert_eq!(data.len(), mem::size_of::<Self>());
 
-        let ptr: *const Ehdr = data.as_ptr().cast();
+        let ptr: *const Self = data.as_ptr().cast();
         assert!(ptr.is_aligned());
 
         let header = unsafe { (*ptr).clone() };
@@ -88,6 +137,7 @@ impl Ehdr {
         assert_eq!(header.machine, EM_AARCH64);
         assert_eq!(usize::from(header.ehsize), mem::size_of::<Ehdr>());
         assert_eq!(usize::from(header.phentsize), mem::size_of::<Phdr>());
+        assert_eq!(usize::from(header.shentsize), mem::size_of::<Shdr>());
 
         header
     }
@@ -115,11 +165,11 @@ impl Phdr {
     ///
     /// # Panics
     ///
-    /// Panics if `data` has the wrong size of alignment.
+    /// Panics if `data` has the wrong size or alignment.
     fn parse(data: &[u8]) -> Self {
-        assert_eq!(data.len(), mem::size_of::<Phdr>());
+        assert_eq!(data.len(), mem::size_of::<Self>());
 
-        let ptr: *const Phdr = data.as_ptr().cast();
+        let ptr: *const Self = data.as_ptr().cast();
         assert!(ptr.is_aligned());
 
         unsafe { (*ptr).clone() }
@@ -139,3 +189,86 @@ impl Phdr {
 }
 
 const PT_LOAD: u32 = 1;
+
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub struct Shdr {
+    name: u32,
+    type_: u32,
+    flags: u64,
+    addr: u64,
+    offset: u64,
+    size: u64,
+    link: u32,
+    info: u32,
+    addralign: u64,
+    entsize: u64,
+}
+
+impl Shdr {
+    /// Parse the given raw data as a [`Shdr`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `data` has the wrong size or alignment.
+    fn parse(data: &[u8]) -> Self {
+        assert_eq!(data.len(), mem::size_of::<Self>());
+
+        let ptr: *const Self = data.as_ptr().cast();
+        assert!(ptr.is_aligned());
+
+        unsafe { (*ptr).clone() }
+    }
+
+    pub fn is_symtab(&self) -> bool {
+        self.type_ == SHT_SYMTAB
+    }
+
+    pub fn is_strtab(&self) -> bool {
+        self.type_ == SHT_STRTAB
+    }
+}
+
+const SHT_SYMTAB: u32 = 2;
+const SHT_STRTAB: u32 = 3;
+
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub struct Sym {
+    name: u32,
+    info: u8,
+    other: u8,
+    shndx: u16,
+    value: u64,
+    size: u64,
+}
+
+impl Sym {
+    /// Parse the given raw data as a [`Sym`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `data` has the wrong size or alignment.
+    fn parse(data: &[u8]) -> Self {
+        assert_eq!(data.len(), mem::size_of::<Self>());
+
+        let ptr: *const Self = data.as_ptr().cast();
+        assert!(ptr.is_aligned());
+
+        unsafe { (*ptr).clone() }
+    }
+
+    /// Extract the symbol's name from the given `strtab`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the symbol's name is not contained in the given `strtab`.
+    pub fn name<'a>(&self, strtab: &'a [u8]) -> &'a CStr {
+        let idx = self.name as usize;
+        CStr::from_bytes_until_nul(&strtab[idx..]).unwrap()
+    }
+
+    pub fn value(&self) -> u64 {
+        self.value
+    }
+}

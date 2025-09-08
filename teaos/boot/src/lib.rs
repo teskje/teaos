@@ -45,6 +45,7 @@ pub fn load() -> ! {
     println!("loading kernel binary");
     let mut kernel = load_kernel();
     println!("  kernel.entry={:#?}", kernel.entry);
+    println!("  kernel.phys_start={:?}", kernel.phys_start);
 
     println!("retrieving ACPI RSDP pointer");
     let rsdp = find_acpi_rsdp();
@@ -54,11 +55,9 @@ pub fn load() -> ! {
     let uart_info = unsafe { find_uart(rsdp) };
     println!("  uart={uart_info:?}");
 
-    if let Some(phys_start) = kernel.phys_start {
-        println!("creating phys mapping at {phys_start:#?}");
-        let uart_base = uart_info.base();
-        create_phys_mapping(&mut kernel.kernel_tt, phys_start, uart_base);
-    }
+    println!("creating phys mapping");
+    let uart_base = uart_info.base();
+    create_phys_mapping(&mut kernel.kernel_tt, kernel.phys_start, uart_base);
 
     println!("exiting boot services");
     let memory_info = exit_boot_services();
@@ -79,7 +78,7 @@ pub fn load() -> ! {
 struct Kernel {
     entry: fn(&BootInfo) -> !,
     kernel_tt: TranslationTable,
-    phys_start: Option<VA>,
+    phys_start: VA,
 }
 
 /// Load the kernel binary.
@@ -103,7 +102,7 @@ fn load_kernel() -> Kernel {
     };
 
     let mut kernel_tt = TranslationTable::new(VA::new(0), alloc_frame);
-    let phdrs = elf.program_headers();
+    let phdrs: Vec<_> = elf.program_headers().collect();
     for phdr in phdrs {
         if !phdr.is_load() {
             continue;
@@ -120,8 +119,17 @@ fn load_kernel() -> Kernel {
         println!("  mapped {va:#} -> {pa:#} ({size:#x} bytes)");
     }
 
-    // TODO: extract from ELF
-    let phys_start = Some(VA::new(0xffff100000000000));
+    let mut phys_start = None;
+    if let Some(strtab) = elf.symbol_strtab() {
+        for sym in elf.symbols().unwrap() {
+            if sym.name(&strtab) == c"phys_start" {
+                phys_start = Some(VA::new(sym.value()));
+                break;
+            }
+        }
+    }
+
+    let phys_start = phys_start.expect("missing `phys_start` kernel symbol");
 
     Kernel {
         entry,
