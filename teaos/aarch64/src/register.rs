@@ -13,6 +13,10 @@ macro_rules! system_register {
         pub struct $name(u64);
 
         impl $name {
+            pub fn new() -> Self {
+                Self(0)
+            }
+
             pub fn read() -> Self {
                 let value: u64;
                 unsafe {
@@ -98,6 +102,17 @@ system_register!(ESR_EL1,
 
 system_register!(FAR_EL1,
     VA[0:63],
+);
+
+system_register!(MAIR_EL1,
+    ATTR0[0:7],
+    ATTR1[8:15],
+    ATTR2[16:23],
+    ATTR3[24:31],
+    ATTR4[32:39],
+    ATTR5[40:47],
+    ATTR6[48:55],
+    ATTR7[56:63],
 );
 
 system_register!(PAR_EL1,

@@ -17,6 +17,10 @@ impl PA {
         Self(x)
     }
 
+    pub const fn into_u64(self) -> u64 {
+        self.0
+    }
+
     pub fn is_aligned_to(&self, x: usize) -> bool {
         usize::from(*self) % x == 0
     }

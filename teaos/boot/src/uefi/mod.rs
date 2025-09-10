@@ -116,7 +116,7 @@ pub fn allocate_page() -> &'static mut [u8; PAGE_SIZE] {
     let buffer = unsafe { &mut *ptr };
 
     // Zero the page memory.
-    buffer.iter_mut().for_each(|b| *b = 0);
+    buffer.fill(0);
 
     buffer
 }

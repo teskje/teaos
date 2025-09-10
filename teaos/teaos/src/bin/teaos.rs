@@ -11,7 +11,7 @@ use teaos::println;
 /// The provided `bootinfo` must contain correct memory addresses.
 #[no_mangle]
 pub unsafe fn _start(bootinfo: &BootInfo) -> ! {
-    teaos::start(bootinfo);
+    teaos::start(bootinfo)
 }
 
 #[panic_handler]

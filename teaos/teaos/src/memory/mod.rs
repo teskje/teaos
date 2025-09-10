@@ -1,17 +1,18 @@
 //! Memory management support.
 
+mod paging;
 mod phys;
 mod virt;
 
-use aarch64::memory::paging::TranslationTable;
-use aarch64::memory::{PA, VA};
+use aarch64::memory::PA;
 use aarch64::register::TTBR1_EL1;
 use boot::info;
 use phys::{alloc_frame, free_frames};
 
+use crate::memory::paging::PageMap;
 use crate::println;
 
-pub use virt::{pa_to_va, PHYS_START, KSTACK_END};
+pub use virt::{pa_to_va, KSTACK_END};
 
 /// Initialize the memory subsystem.
 ///
@@ -40,16 +41,13 @@ fn init_translation_tables() {
 
     let ttbr = TTBR1_EL1::read();
     let boot_ttb = PA::new(ttbr.BADDR() << 1);
-    let boot_tt = TranslationTable::with_base(boot_ttb, PHYS_START);
+    let boot_map = PageMap::with_root(boot_ttb);
 
-    let mut kernel_tt = TranslationTable::new(PHYS_START, alloc_frame);
-    kernel_tt.clone_from(&boot_tt, alloc_frame);
-    kernel_tt.load();
-}
+    let mut kernel_map = PageMap::new();
+    kernel_map.clone_from(&boot_map);
 
-pub fn map_page(va: VA, pa: PA) {
-    let ttbr1 = TTBR1_EL1::read();
-    let base = PA::new(ttbr1.BADDR());
-    let mut kernel_tt = TranslationTable::with_base(base, PHYS_START);
-    kernel_tt.map_page(va, pa, alloc_frame);
+    // SAFETY: New map contains all existing mappings.
+    unsafe { kernel_map.load_ttbr1() };
+
+    // TODO init global state
 }
