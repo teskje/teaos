@@ -2,6 +2,9 @@
 
 use core::fmt::{self, Write};
 
+use boot::info;
+
+use crate::memory::pa_to_va;
 use crate::uart::Uart;
 
 static mut LOGGER: Logger = Logger::new();
@@ -26,11 +29,25 @@ impl Write for Logger {
     }
 }
 
-pub fn init(uart: Uart) {
-    unsafe {
-        let logger = &raw mut LOGGER;
-        (*logger).uart = Some(uart);
-    }
+/// Initialize kernel logging.
+///
+/// # Safety
+///
+/// The given UART configuration must be correct.
+pub unsafe fn init(uart_info: &info::Uart) {
+    let uart = match uart_info {
+        info::Uart::Pl011 { base } => {
+            let base = pa_to_va(*base);
+            Uart::pl011(base.as_mut_ptr())
+        }
+        info::Uart::Uart16550 { base } => {
+            let base = pa_to_va(*base);
+            Uart::uart16550(base.as_mut_ptr())
+        }
+    };
+
+    let logger = &raw mut LOGGER;
+    (*logger).uart = Some(uart);
 }
 
 pub fn write(args: fmt::Arguments) {

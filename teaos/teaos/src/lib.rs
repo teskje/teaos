@@ -10,10 +10,9 @@ mod uart;
 
 use core::arch::naked_asm;
 
-use boot::info::{self, BootInfo};
+use boot::info::BootInfo;
 
-use crate::memory::{pa_to_va, KSTACK_END};
-use crate::uart::Uart;
+use crate::memory::KSTACK_END;
 
 /// The kernel entry point.
 ///
@@ -42,36 +41,21 @@ pub unsafe extern "C" fn start(bootinfo: &BootInfo) -> ! {
 ///
 /// The provided `bootinfo` must contain correct memory addresses.
 unsafe extern "C" fn kernel_main(bootinfo: &BootInfo) -> ! {
-    init_logging(&bootinfo.uart);
+    log::init(&bootinfo.uart);
     log!("enterned kernel");
 
-    print_bootinfo(bootinfo);
+    log_bootinfo(bootinfo);
 
     exception::init();
     memory::init(&bootinfo.memory);
 
     // TODO: reclaim boot memory
-    
+
     log!("made it to the end!");
     aarch64::halt();
 }
 
-unsafe fn init_logging(uart_info: &info::Uart) {
-    let uart = match uart_info {
-        info::Uart::Pl011 { base } => {
-            let base = pa_to_va(*base);
-            Uart::pl011(base.as_mut_ptr())
-        }
-        info::Uart::Uart16550 { base } => {
-            let base = pa_to_va(*base);
-            Uart::uart16550(base.as_mut_ptr())
-        }
-    };
-
-    log::init(uart);
-}
-
-fn print_bootinfo(bootinfo: &BootInfo) {
+fn log_bootinfo(bootinfo: &BootInfo) {
     let BootInfo {
         memory,
         uart,
