@@ -1,21 +1,25 @@
 use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 use std::{env, io};
 
 use anyhow::{bail, Context};
+use aws_sdk_ebs::primitives::ByteStream;
+use aws_sdk_ebs::types::ChecksumAlgorithm;
 use aws_sdk_ec2::client::Waiters;
 use aws_sdk_ec2::types::builders::{
-    BlockDeviceMappingBuilder, EbsBlockDeviceBuilder, FilterBuilder, SnapshotDiskContainerBuilder,
-    TagBuilder, TagSpecificationBuilder, UserBucketBuilder,
+    BlockDeviceMappingBuilder, EbsBlockDeviceBuilder, FilterBuilder, TagBuilder,
+    TagSpecificationBuilder,
 };
 use aws_sdk_ec2::types::{ArchitectureValues, BootModeValues, InstanceType, ResourceType};
-use aws_sdk_s3::primitives::ByteStream;
+use base64::prelude::*;
 use fatfs::{FileSystem, FormatVolumeOptions, FsOptions};
 use fscommon::{BufStream, StreamSlice};
 use gpt::mbr::ProtectiveMBR;
 use gpt::{partition_types, GptConfig};
+use sha2::{Digest, Sha256};
 
 /// xtask runner for the TeaOS repo.
 #[derive(argh::FromArgs)]
@@ -50,9 +54,6 @@ struct AwsArgs {
     /// build in release mode
     #[argh(switch)]
     release: bool,
-    /// S3 bucket for uploading the image
-    #[argh(option)]
-    s3_bucket: String,
 }
 
 #[tokio::main]
@@ -64,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
 
     match args.task {
         TaskArgs::Qemu(args) => task_qemu(args.release, args.gdb),
-        TaskArgs::Aws(args) => task_aws(args.release, &args.s3_bucket).await,
+        TaskArgs::Aws(args) => task_aws(args.release).await,
     }
 }
 
@@ -96,7 +97,7 @@ fn task_qemu(release: bool, gdb: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn task_aws(release: bool, s3_bucket: &str) -> anyhow::Result<()> {
+async fn task_aws(release: bool) -> anyhow::Result<()> {
     println!("building boot.efi (release={release})");
     let boot_bin = build_boot(release)?;
     println!("building teaos (release={release})");
@@ -108,47 +109,17 @@ async fn task_aws(release: bool, s3_bucket: &str) -> anyhow::Result<()> {
     create_esp_image(&esp_img, &boot_bin, &kernel_bin)?;
 
     let aws_config = aws_config::load_from_env().await;
-    let s3 = aws_sdk_s3::Client::new(&aws_config);
     let ec2 = aws_sdk_ec2::Client::new(&aws_config);
+    let ebs = aws_sdk_ebs::Client::new(&aws_config);
 
-    println!("uploading disk image to s3://{s3_bucket}/{esp_img_name}");
-    let body = ByteStream::from_path(esp_img).await?;
-    s3.put_object()
-        .bucket(s3_bucket)
-        .key(esp_img_name)
-        .body(body)
-        .send()
-        .await?;
+    println!("creating EBS snapshot");
+    let snapshot_id = create_ebs_snapshot(&ebs, &esp_img).await?;
 
-    println!("starting EBS snapshot import task");
-    let user_bucket = UserBucketBuilder::default()
-        .s3_bucket(s3_bucket)
-        .s3_key(esp_img_name)
-        .build();
-    let disk_container = SnapshotDiskContainerBuilder::default()
-        .format("RAW")
-        .user_bucket(user_bucket)
-        .build();
-    let output = ec2
-        .import_snapshot()
-        .description("TeaOS boot disk")
-        .disk_container(disk_container)
-        .send()
-        .await?;
-    let task_id = output.import_task_id.unwrap();
-
-    println!("waiting for snapshot import to complete (task_id={task_id})");
-    let final_poll = ec2
-        .wait_until_snapshot_imported()
-        .import_task_ids(task_id)
+    println!("waiting for snapshot to complete (snapshot_id={snapshot_id})");
+    ec2.wait_until_snapshot_completed()
+        .snapshot_ids(&snapshot_id)
         .wait(Duration::from_secs(600))
         .await?;
-    let output = final_poll.into_result()?;
-    let snapshot_id = output
-        .import_snapshot_tasks
-        .and_then(|mut t| t.remove(0).snapshot_task_detail)
-        .and_then(|d| d.snapshot_id)
-        .unwrap();
 
     println!("checking for existing AMI");
     let filter = FilterBuilder::default()
@@ -323,6 +294,88 @@ fn create_esp_image(img_path: &Path, boot_bin: &Path, kernel_bin: &Path) -> anyh
     let mut src = File::open(kernel_bin)?;
     let mut dst = root.create_file("kernel")?;
     io::copy(&mut src, &mut dst)?;
+
+    Ok(())
+}
+
+async fn create_ebs_snapshot(ebs: &aws_sdk_ebs::Client, img_path: &Path) -> anyhow::Result<String> {
+    let img_file = File::open(img_path)?;
+    let img_size = img_file.metadata()?.len();
+    let volume_size = img_size.div_ceil(1 << 30);
+
+    let output = ebs
+        .start_snapshot()
+        .volume_size(volume_size as i64)
+        .description("TeaOS img")
+        .send()
+        .await?;
+
+    let snapshot_id = output.snapshot_id.unwrap();
+    let block_size = output.block_size.unwrap();
+
+    let empty_block_hash = Sha256::digest(vec![0; block_size as usize]);
+
+    let mut block_idx = 0;
+    let mut changed_blocks = 0;
+    with_chunks(img_file, block_size as usize, async |block| {
+        let hash = Sha256::digest(block);
+        if hash != empty_block_hash {
+            let checksum = BASE64_STANDARD.encode(hash);
+            let data = ByteStream::from(block.to_vec());
+
+            ebs.put_snapshot_block()
+                .snapshot_id(&snapshot_id)
+                .block_index(block_idx)
+                .block_data(data)
+                .data_length(block_size)
+                .checksum(checksum)
+                .checksum_algorithm(ChecksumAlgorithm::ChecksumAlgorithmSha256)
+                .send()
+                .await?;
+
+            changed_blocks += 1;
+        }
+
+        block_idx += 1;
+        Ok(())
+    })
+    .await?;
+
+    ebs.complete_snapshot()
+        .snapshot_id(&snapshot_id)
+        .changed_blocks_count(changed_blocks)
+        .send()
+        .await?;
+
+    Ok(snapshot_id)
+}
+
+async fn with_chunks(
+    mut rd: impl Read,
+    chunk_size: usize,
+    mut f: impl AsyncFnMut(&[u8]) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let mut buf = vec![0; chunk_size];
+    let mut fill = 0;
+    loop {
+        while fill < chunk_size {
+            let len = rd.read(&mut buf[fill..])?;
+            if len == 0 {
+                break;
+            }
+            fill += len;
+        }
+
+        if fill == 0 {
+            break;
+        }
+        if fill < chunk_size {
+            buf[fill..].fill(0);
+        }
+
+        f(&buf).await?;
+        fill = 0;
+    }
 
     Ok(())
 }
