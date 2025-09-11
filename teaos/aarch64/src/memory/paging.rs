@@ -10,6 +10,7 @@ pub const PAGE_SIZE: usize = 4 << 10;
 /// Data structure for manipulating page tables.
 pub struct PageMap<Alloc, Mapper> {
     root: PA,
+    mair_idx: MairIndexes,
     _frame_alloc: PhantomData<Alloc>,
     _addr_mapper: PhantomData<Mapper>,
 }
@@ -29,6 +30,7 @@ where
 
         Self {
             root,
+            mair_idx: MairIndexes::read(),
             _frame_alloc: PhantomData,
             _addr_mapper: PhantomData,
         }
@@ -52,7 +54,15 @@ where
         assert!(va.is_aligned_to(PAGE_SIZE), "unaligned: {va:#}");
         assert!(pa.is_aligned_to(PAGE_SIZE), "unaligned: {pa:#}");
 
-        let desc = Descriptor::new_page(pa, class);
+        let (attr_idx, share) = match class {
+            MemoryClass::Normal => (self.mair_idx.normal, Shareability::Inner),
+            MemoryClass::Device => (self.mair_idx.device, Shareability::Outer),
+        };
+
+        let mut desc = Descriptor::new_page(pa);
+        desc.set_attr_idx(attr_idx);
+        desc.set_shareability(share);
+
         self.insert(va, desc);
     }
 
@@ -164,8 +174,6 @@ where
     /// all existing mappings still required by existing threads are also present in the new
     /// mappings.
     pub unsafe fn load_ttbr1(&self) {
-        let mair = MemoryAttr::mair();
-
         let mut tcr = TCR_EL1::read();
         tcr.set_T1SZ(16);
         tcr.set_EPD1(0);
@@ -178,7 +186,6 @@ where
         dsb_ishst();
 
         unsafe {
-            MAIR_EL1::write(mair);
             TTBR1_EL1::write(self.root);
             TCR_EL1::write(tcr);
         }
@@ -230,7 +237,7 @@ impl Descriptor {
         Self(pa.into_u64() | 0b11)
     }
 
-    fn new_page(pa: PA, class: MemoryClass) -> Self {
+    fn new_page(pa: PA) -> Self {
         assert!(pa.is_aligned_to(PAGE_SIZE));
         assert!(pa.into_u64() < (1 << 48));
 
@@ -238,17 +245,6 @@ impl Descriptor {
 
         // Prevent the generation of Access flag faults.
         desc.set_access_flag();
-
-        match class {
-            MemoryClass::Normal => {
-                desc.set_memory_attr(MemoryAttr::Normal);
-                desc.set_shareability(Shareability::Inner);
-            }
-            MemoryClass::Device => {
-                desc.set_memory_attr(MemoryAttr::Device);
-                desc.set_shareability(Shareability::Outer);
-            }
-        }
 
         desc
     }
@@ -261,12 +257,12 @@ impl Descriptor {
         self.0 |= 1 << 10;
     }
 
-    fn set_memory_attr(&mut self, attr: MemoryAttr) {
+    fn set_attr_idx(&mut self, attr_idx: u8) {
         const MASK: u64 = 0b111;
         const SHIFT: u64 = 2;
 
         self.0 &= !(MASK << SHIFT);
-        self.0 |= (attr as u64) << SHIFT;
+        self.0 |= u64::from(attr_idx) << SHIFT;
     }
 
     fn set_shareability(&mut self, share: Shareability) {
@@ -295,17 +291,38 @@ enum DescriptorType {
     Block,
 }
 
-enum MemoryAttr {
-    Device = 0,
-    Normal = 1,
+struct MairIndexes {
+    device: u8,
+    normal: u8,
 }
 
-impl MemoryAttr {
-    fn mair() -> MAIR_EL1 {
-        let mut mair = MAIR_EL1::new();
-        mair.set_ATTR0(0x00); // device nGnRne
-        mair.set_ATTR1(0xff); // normal WBWA
-        mair
+impl MairIndexes {
+    fn read() -> Self {
+        let mut device = None;
+        let mut normal = None;
+
+        let mut check = |idx, attr| {
+            if attr == 0x00 {
+                device = Some(idx);
+            } else if attr == 0xff {
+                normal = Some(idx);
+            }
+        };
+
+        let mair = MAIR_EL1::read();
+        check(0, mair.ATTR0());
+        check(1, mair.ATTR1());
+        check(2, mair.ATTR2());
+        check(3, mair.ATTR3());
+        check(4, mair.ATTR4());
+        check(5, mair.ATTR5());
+        check(6, mair.ATTR6());
+        check(7, mair.ATTR7());
+
+        Self {
+            device: device.expect("missing device attr"),
+            normal: normal.expect("missing normal attr"),
+        }
     }
 }
 
