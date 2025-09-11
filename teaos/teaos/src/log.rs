@@ -1,6 +1,6 @@
 //! Print logging support.
 
-use core::fmt;
+use core::fmt::{self, Write};
 
 use crate::uart::Uart;
 
@@ -16,7 +16,7 @@ impl Logger {
     }
 }
 
-impl fmt::Write for Logger {
+impl Write for Logger {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         if let Some(uart) = &mut self.uart {
             uart.write_str(s)
@@ -40,13 +40,18 @@ pub fn write(args: fmt::Arguments) {
     }
 }
 
+#[inline(never)]
+pub fn log_args(args: fmt::Arguments) {
+    let time = aarch64::uptime();
+    unsafe {
+        let logger = &raw mut LOGGER;
+        writeln!(&mut *logger, "{time} [boot] {args}").unwrap();
+    }
+}
+
 #[macro_export]
-macro_rules! println {
+macro_rules! log {
     ($($arg:tt)*) => {{
-        let time = aarch64::uptime();
-        let module = module_path!();
-        $crate::log::write(format_args!("{time} [{module}] "));
-        $crate::log::write(format_args!($($arg)*));
-        $crate::log::write(format_args!("\n"));
+        $crate::log::log_args(format_args!($($arg)*));
     }};
 }

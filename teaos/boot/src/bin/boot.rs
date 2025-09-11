@@ -6,7 +6,7 @@
 use core::ffi::c_void;
 use core::panic::PanicInfo;
 
-use boot::println;
+use boot::log;
 
 #[no_mangle]
 unsafe extern "efiapi" fn efi_main(image_handle: *mut c_void, system_table: *mut c_void) -> ! {
@@ -16,9 +16,9 @@ unsafe extern "efiapi" fn efi_main(image_handle: *mut c_void, system_table: *mut
 
 #[panic_handler]
 fn panic(panic: &PanicInfo<'_>) -> ! {
-    println!("PANIC: {}", panic.message());
+    log!("PANIC: {}", panic.message());
     if let Some(loc) = panic.location() {
-        println!("  in file '{}' at line {}", loc.file(), loc.line());
+        log!("  in file '{}' at line {}", loc.file(), loc.line());
     }
 
     aarch64::halt();

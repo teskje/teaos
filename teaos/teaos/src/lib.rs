@@ -43,7 +43,7 @@ pub unsafe extern "C" fn start(bootinfo: &BootInfo) -> ! {
 /// The provided `bootinfo` must contain correct memory addresses.
 unsafe extern "C" fn kernel_main(bootinfo: &BootInfo) -> ! {
     init_logging(&bootinfo.uart);
-    println!("enterned kernel");
+    log!("enterned kernel");
 
     print_bootinfo(bootinfo);
 
@@ -52,7 +52,7 @@ unsafe extern "C" fn kernel_main(bootinfo: &BootInfo) -> ! {
 
     // TODO: reclaim boot memory
 
-    println!("made it to the end!");
+    log!("made it to the end!");
     aarch64::halt();
 }
 
@@ -78,12 +78,12 @@ fn print_bootinfo(bootinfo: &BootInfo) {
         acpi_rsdp,
     } = bootinfo;
 
-    println!("bootinfo.memory:");
-    println!("     start        pages    type");
-    println!("  ------------------------------");
+    log!("bootinfo.memory:");
+    log!("     start        pages    type");
+    log!("  ------------------------------");
     for block in &memory.blocks {
-        println!("  {:#012}  {:8}  {}", block.start, block.pages, block.type_);
+        log!("  {:#012}  {:8}  {}", block.start, block.pages, block.type_);
     }
-    println!("bootinfo.uart: {uart:?}");
-    println!("bootinfo.acpi_rsdp: {acpi_rsdp:#}");
+    log!("bootinfo.uart: {uart:?}");
+    log!("bootinfo.acpi_rsdp: {acpi_rsdp:#}");
 }

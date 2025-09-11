@@ -5,7 +5,7 @@ use core::arch::global_asm;
 use aarch64::instruction::isb;
 use aarch64::register::{ESR_EL1, FAR_EL1, VBAR_EL1};
 
-use crate::println;
+use crate::log;
 
 extern "C" {
     #[link_name = "exception_vectors"]
@@ -16,7 +16,7 @@ global_asm!(include_str!("vector.S"));
 
 /// Initialize exception handling.
 pub fn init() {
-    println!("initializing exception handling");
+    log!("initializing exception handling");
 
     unsafe {
         let vector_base = &EXCEPTION_VECTORS as *const _ as u64;
@@ -77,6 +77,6 @@ pub extern "C" fn handle_exception_el1(stack: &mut ExceptionStack) {
 }
 
 fn breakpoint(stack: &mut ExceptionStack) {
-    println!("skipping breakpoint");
+    log!("skipping breakpoint");
     stack.elr += 4;
 }

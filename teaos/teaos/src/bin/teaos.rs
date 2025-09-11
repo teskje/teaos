@@ -4,7 +4,7 @@
 use core::panic::PanicInfo;
 
 use boot::info::BootInfo;
-use teaos::println;
+use teaos::log;
 
 /// # Safety
 ///
@@ -16,9 +16,9 @@ pub unsafe fn _start(bootinfo: &BootInfo) -> ! {
 
 #[panic_handler]
 fn panic(panic: &PanicInfo<'_>) -> ! {
-    println!("PANIC: {}", panic.message());
+    log!("PANIC: {}", panic.message());
     if let Some(loc) = panic.location() {
-        println!("  in file '{}' at line {}", loc.file(), loc.line());
+        log!("  in file '{}' at line {}", loc.file(), loc.line());
     }
 
     aarch64::halt();

@@ -10,7 +10,7 @@ use boot::info;
 use phys::{alloc_frame, free_frames};
 
 use crate::memory::paging::PageMap;
-use crate::println;
+use crate::log;
 
 pub use virt::{pa_to_va, KSTACK_END};
 
@@ -19,9 +19,9 @@ pub use virt::{pa_to_va, KSTACK_END};
 /// Here we seed the frame allocator, take over the kernel translation tables, and initialize the
 /// heap allocator, unlocking use of the `alloc` crate.
 pub unsafe fn init(info: &info::Memory) {
-    println!("initializing memory management");
+    log!("initializing memory management");
 
-    println!("  seeding frame allocator with unused blocks");
+    log!("  seeding frame allocator with unused blocks");
     for block in &info.blocks {
         if block.type_ == info::MemoryType::Unused {
             free_frames(block.start, block.pages);
@@ -37,7 +37,7 @@ pub unsafe fn init(info: &info::Memory) {
 /// a new set of tables and then switching over to those. Doing so allows us to later free all boot
 /// loader memory without having to make exceptions for the translation tables.
 fn init_translation_tables() {
-    println!("  initializing kernel translation tables");
+    log!("  initializing kernel translation tables");
 
     let ttbr = TTBR1_EL1::read();
     let boot_ttb = PA::new(ttbr.BADDR() << 1);

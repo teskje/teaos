@@ -41,26 +41,26 @@ pub unsafe fn init_uefi(image_handle: *mut c_void, system_table: *mut c_void) {
 /// This loads the kernel binary, retrieves all required boot information, and finally passes
 /// control to the kernel.
 pub fn load() -> ! {
-    println!("entered UEFI boot loader");
+    log!("entered UEFI boot loader");
 
-    println!("loading kernel binary");
+    log!("loading kernel binary");
     let mut kernel = load_kernel();
-    println!("  kernel.entry={:#?}", kernel.entry);
-    println!("  kernel.phys_start={:?}", kernel.phys_start);
+    log!("  kernel.entry={:#?}", kernel.entry);
+    log!("  kernel.phys_start={:?}", kernel.phys_start);
 
-    println!("retrieving ACPI RSDP pointer");
+    log!("retrieving ACPI RSDP pointer");
     let rsdp = find_acpi_rsdp();
-    println!("  rsdp_ptr={rsdp:#?}");
+    log!("  rsdp_ptr={rsdp:#?}");
 
-    println!("retrieving UART config");
+    log!("retrieving UART config");
     let uart_info = unsafe { find_uart(rsdp) };
-    println!("  uart={uart_info:?}");
+    log!("  uart={uart_info:?}");
 
-    println!("creating phys mapping");
+    log!("creating phys mapping");
     let uart_base = uart_info.base();
     create_phys_mapping(&mut kernel.kernel_map, kernel.phys_start, uart_base);
 
-    println!("exiting boot services");
+    log!("exiting boot services");
     let memory_info = exit_boot_services();
 
     // No (de)allocating or logging beyond this point!
@@ -114,7 +114,7 @@ fn load_kernel() -> Kernel {
         let size = buffer.len();
         let class = MemoryClass::Normal;
         kernel_map.map_region(va, pa, size, class);
-        println!("  mapped {va:#} -> {pa:#} ({size:#x} bytes, {class:?})");
+        log!("  mapped {va:#} -> {pa:#} ({size:#x} bytes, {class:?})");
     }
 
     let mut phys_start = None;
@@ -156,14 +156,14 @@ fn create_phys_mapping(kernel_map: &mut PageMap, phys_start: VA, uart_base: PA) 
             MemoryType::Mmio => MemoryClass::Device,
         };
         kernel_map.map_region(va, pa, size, class);
-        println!("  mapped {va:#} -> {pa:#} ({size:#x} bytes, {class:?})");
+        log!("  mapped {va:#} -> {pa:#} ({size:#x} bytes, {class:?})");
     }
 
     // The UEFI memory map doesn't include all device MMIO regions, so map the UART one explicitly.
     let va = phys_start + u64::from(uart_base);
     let class = MemoryClass::Device;
     kernel_map.map_page(va, uart_base, class);
-    println!("  mapped {va:#} -> {uart_base:#} ({PAGE_SIZE:#x} bytes, {class:?})");
+    log!("  mapped {va:#} -> {uart_base:#} ({PAGE_SIZE:#x} bytes, {class:?})");
 }
 
 /// Find the ACPI RSDP in the UEFI config table.

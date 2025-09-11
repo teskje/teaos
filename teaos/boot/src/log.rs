@@ -1,20 +1,19 @@
 //! Print logging support.
 
-use core::fmt;
+use core::fmt::{self, Write};
 
 use crate::uefi;
 
-pub fn write(args: fmt::Arguments) {
+#[inline(never)]
+pub fn log_args(args: fmt::Arguments) {
+    let time = aarch64::uptime();
     let mut out = uefi::console_out();
-    fmt::write(&mut out, args).unwrap();
+    writeln!(&mut out, "{time} [boot] {args}").unwrap();
 }
 
 #[macro_export]
-macro_rules! println {
+macro_rules! log {
     ($($arg:tt)*) => {{
-        let time = aarch64::uptime();
-        $crate::log::write(format_args!("{time} [boot]  "));
-        $crate::log::write(format_args!($($arg)*));
-        $crate::log::write(format_args!("\n"));
+        $crate::log::log_args(format_args!($($arg)*));
     }};
 }
