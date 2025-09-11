@@ -8,9 +8,7 @@ members = [
     "teaos/teaos",
     "xtask",
 ]
-resolver = "2"
+resolver = "3"
 
-# Bump the opt-level for the `teaos` crate in debug mode. Without this, filling
-# pages in the physical allocator is unbearably slow.
-[profile.dev.package.teaos]
-opt-level = 2
+[workspace.package]
+edition = "2024"

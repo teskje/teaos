@@ -7,7 +7,7 @@ use aarch64::register::{ESR_EL1, FAR_EL1, VBAR_EL1};
 
 use crate::log;
 
-extern "C" {
+unsafe extern "C" {
     #[link_name = "exception_vectors"]
     static EXCEPTION_VECTORS: u8;
 }
@@ -53,7 +53,7 @@ pub(super) struct ExceptionStack {
     x30: u64,
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn handle_unhandled(stack: &mut ExceptionStack) {
     let esr = ESR_EL1::read();
     let far = FAR_EL1::read();
@@ -66,7 +66,7 @@ pub extern "C" fn handle_unhandled(stack: &mut ExceptionStack) {
     );
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn handle_exception_el1(stack: &mut ExceptionStack) {
     let esr = ESR_EL1::read();
 

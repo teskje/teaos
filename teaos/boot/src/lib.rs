@@ -33,7 +33,7 @@ use crate::paging::PageMap;
 ///
 /// `system_table` must be a valid pointer to a [`sys::SYSTEM_TABLE`].
 pub unsafe fn init_uefi(image_handle: *mut c_void, system_table: *mut c_void) {
-    uefi::init(image_handle, system_table.cast());
+    unsafe { uefi::init(image_handle, system_table.cast()) }
 }
 
 /// Run the boot loader.
@@ -188,39 +188,44 @@ fn find_acpi_rsdp() -> *mut acpi::RSDP {
 /// # Safety
 ///
 /// `rsdp` must be a valid pointer to an [`acpi::RSDP`].
-unsafe fn find_uart(rsdp: *mut acpi::RSDP) -> info::Uart {
-    assert_eq!((*rsdp).signature, *b"RSD PTR ");
-    assert_eq!((*rsdp).revision, 2);
+unsafe fn find_uart(rsdp_ptr: *mut acpi::RSDP) -> info::Uart {
+    let rsdp = unsafe { &*rsdp_ptr };
 
-    let xsdt = (*rsdp).xsdt_address;
-    assert_eq!((*xsdt).header.signature, *b"XSDT");
-    assert_eq!((*xsdt).header.revision, 1);
+    assert_eq!(rsdp.signature, *b"RSD PTR ");
+    assert_eq!(rsdp.revision, 2);
 
-    let xsdt_size = (*xsdt).header.length as usize;
+    let xsdt_ptr = rsdp.xsdt_address;
+    let xsdt = unsafe { &*xsdt_ptr };
+    assert_eq!(xsdt.header.signature, *b"XSDT");
+    assert_eq!(xsdt.header.revision, 1);
+
+    let xsdt_size = xsdt.header.length as usize;
     let mut entry_size = xsdt_size - mem::size_of::<acpi::XSDT>();
-    let mut entry_ptr = (*xsdt).entry.as_mut_ptr();
+    let mut entry_ptr = xsdt.entry.as_ptr();
 
-    let mut spcr: Option<*mut acpi::SPCR> = None;
+    let mut spcr: Option<&acpi::SPCR> = None;
     const ADDR_SIZE: usize = mem::size_of::<usize>();
     while entry_size >= ADDR_SIZE {
-        let addr_bytes = entry_ptr as *mut [u8; ADDR_SIZE];
-        let addr = usize::from_le_bytes(*addr_bytes);
-        let desc = addr as *mut acpi::DESCRIPTION_HEADER;
-        if (*desc).signature == *b"SPCR" {
-            spcr = Some(desc.cast());
+        let addr_bytes_ptr = entry_ptr as *mut [u8; ADDR_SIZE];
+        let addr_bytes = unsafe { *addr_bytes_ptr };
+        let addr = usize::from_le_bytes(addr_bytes);
+        let desc_ptr = addr as *mut acpi::DESCRIPTION_HEADER;
+        let desc = unsafe { &*desc_ptr };
+        if desc.signature == *b"SPCR" {
+            spcr = Some(unsafe { &*desc_ptr.cast() });
             break;
         }
 
-        entry_ptr = entry_ptr.add(ADDR_SIZE);
+        entry_ptr = unsafe { entry_ptr.add(ADDR_SIZE) };
         entry_size -= ADDR_SIZE;
     }
 
     let spcr = spcr.expect("SPCR table present");
-    assert_eq!((*spcr).header.revision, 2);
+    assert_eq!(spcr.header.revision, 2);
 
-    let base = (*spcr).base_address.address;
+    let base = spcr.base_address.address;
 
-    match (*spcr).interface_type {
+    match spcr.interface_type {
         acpi::UART_TYPE_16550 => info::Uart::Uart16550 { base },
         acpi::UART_TYPE_PL011 => info::Uart::Pl011 { base },
         value => unimplemented!("UART type: {value:#x}"),

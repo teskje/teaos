@@ -3,7 +3,7 @@ use core::ptr;
 
 use super::bs_ref::BsRef;
 use super::protocol::{FileSystem, LoadedImage};
-use super::{sys, validate_mut_ptr, validate_table_header, MemoryMap};
+use super::{MemoryMap, sys, validate_mut_ptr, validate_table_header};
 
 use alloc::vec::Vec;
 
@@ -17,7 +17,7 @@ impl BootServices {
     /// `ptr` must be a valid pointer to a [`sys::BOOT_SERVICES`].
     pub unsafe fn new(ptr: *mut sys::BOOT_SERVICES) -> Self {
         validate_mut_ptr(ptr);
-        validate_table_header(&raw const (*ptr).hdr, sys::BOOT_SERVICES_SIGNATURE);
+        unsafe { validate_table_header(&raw const (*ptr).hdr, sys::BOOT_SERVICES_SIGNATURE) };
 
         Self {
             ptr: BsRef::new(ptr),

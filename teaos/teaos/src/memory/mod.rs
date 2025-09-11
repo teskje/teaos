@@ -9,10 +9,10 @@ use aarch64::register::TTBR1_EL1;
 use boot::info;
 use phys::{alloc_frame, free_frames};
 
-use crate::memory::paging::PageMap;
 use crate::log;
+use crate::memory::paging::PageMap;
 
-pub use virt::{pa_to_va, KSTACK_END};
+pub use virt::{KSTACK_END, pa_to_va};
 
 /// Initialize the memory subsystem.
 ///
@@ -24,7 +24,7 @@ pub unsafe fn init(info: &info::Memory) {
     log!("  seeding frame allocator with unused blocks");
     for block in &info.blocks {
         if block.type_ == info::MemoryType::Unused {
-            free_frames(block.start, block.pages);
+            unsafe { free_frames(block.start, block.pages) };
         }
     }
 

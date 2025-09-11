@@ -16,7 +16,9 @@ impl LoadedImage {
     /// `ptr` must be a valid pointer to a [`sys::LOADED_IMAGE_PROTOCOL`].
     pub unsafe fn new(ptr: *mut sys::LOADED_IMAGE_PROTOCOL) -> Self {
         validate_mut_ptr(ptr);
-        assert_eq!((*ptr).revision, sys::LOADED_IMAGE_PROTOCOL_REVISION);
+
+        let proto = unsafe { &*ptr };
+        assert_eq!(proto.revision, sys::LOADED_IMAGE_PROTOCOL_REVISION);
 
         Self {
             ptr: BsRef::new(ptr),
@@ -70,7 +72,9 @@ impl FileSystem {
     /// `ptr` must be a valid pointer to a [`sys::SIMPLE_FILE_SYSTEM_PROTOCOL`].
     pub unsafe fn new(ptr: *mut sys::SIMPLE_FILE_SYSTEM_PROTOCOL) -> Self {
         validate_mut_ptr(ptr);
-        assert_eq!((*ptr).revision, sys::SIMPLE_FILE_SYSTEM_PROTOCOL_REVISION);
+
+        let proto = unsafe { &*ptr };
+        assert_eq!(proto.revision, sys::SIMPLE_FILE_SYSTEM_PROTOCOL_REVISION);
 
         Self {
             ptr: BsRef::new(ptr),
@@ -98,7 +102,9 @@ impl File {
     /// `ptr` must be a valid pointer to a [`sys::FILE_PROTOCOL`].
     pub unsafe fn new(ptr: *mut sys::FILE_PROTOCOL) -> Self {
         validate_mut_ptr(ptr);
-        assert!((*ptr).revision >= sys::FILE_PROTOCOL_REVISION);
+
+        let proto = unsafe { &*ptr };
+        assert!(proto.revision >= sys::FILE_PROTOCOL_REVISION);
 
         Self {
             ptr: BsRef::new(ptr),

@@ -8,9 +8,9 @@ use core::panic::PanicInfo;
 
 use boot::log;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "efiapi" fn efi_main(image_handle: *mut c_void, system_table: *mut c_void) -> ! {
-    boot::init_uefi(image_handle, system_table);
+    unsafe { boot::init_uefi(image_handle, system_table) };
     boot::load();
 }
 

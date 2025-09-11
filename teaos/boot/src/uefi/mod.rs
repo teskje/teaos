@@ -74,7 +74,7 @@ impl Uefi {
 /// `system_table` must be a valid pointer to a [`sys::SYSTEM_TABLE`].
 pub unsafe fn init(image_handle: sys::HANDLE, system_table: *mut sys::SYSTEM_TABLE) {
     validate_mut_ptr(system_table);
-    validate_table_header(&raw const (*system_table).hdr, sys::SYSTEM_TABLE_SIGNATURE);
+    unsafe { validate_table_header(&raw const (*system_table).hdr, sys::SYSTEM_TABLE_SIGNATURE) };
 
     *UEFI.lock() = Some(Uefi {
         image_handle,
@@ -222,21 +222,23 @@ impl MemoryMap {
 /// `ptr` must be a valid pointer to a [`sys::TABLE_HEADER`], as well as `header_size` subsequent
 /// bytes.
 unsafe fn validate_table_header(ptr: *const sys::TABLE_HEADER, signature: u64) {
-    assert_eq!((*ptr).signature, signature);
-    assert_eq!((*ptr).revision & (2 << 16), 2 << 16);
+    let hdr = unsafe { &*ptr };
+
+    assert_eq!(hdr.signature, signature);
+    assert_eq!(hdr.revision & (2 << 16), 2 << 16);
 
     let start: *const u8 = ptr.cast();
-    let crc32_start: *const u8 = (&raw const (*ptr).crc32).cast();
-    let crc32_end: *const u8 = (&raw const (*ptr).reserved).cast();
+    let crc32_start: *const u8 = (&raw const hdr.crc32).cast();
+    let crc32_end: *const u8 = (&raw const hdr.reserved).cast();
 
     let mut crc = Crc32::new();
-    for i in 0..(*ptr).header_size {
-        let data = start.add(i as usize);
+    for i in 0..hdr.header_size {
+        let data = unsafe { start.add(i as usize) };
         if data >= crc32_start && data < crc32_end {
             crc.update(0x00);
         } else {
-            crc.update(*data);
+            crc.update(unsafe { *data });
         }
     }
-    assert_eq!(crc.finish(), (*ptr).crc32);
+    assert_eq!(crc.finish(), hdr.crc32);
 }

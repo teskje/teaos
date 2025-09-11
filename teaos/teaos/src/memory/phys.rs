@@ -42,7 +42,7 @@ impl FrameAllocator {
 
         // Insert the frame into the freelist.
         let next_pa = self.freelist.unwrap_or(PA::new(0));
-        va.as_mut_ptr::<PA>().write(next_pa);
+        unsafe { va.as_mut_ptr::<PA>().write(next_pa) };
 
         self.freelist = Some(pa);
     }
@@ -59,7 +59,7 @@ pub(super) fn alloc_frame() -> PA {
 ///
 /// `pa` must point to an unused page frame.
 pub(super) unsafe fn free_frame(pa: PA) {
-    FRAME_ALLOCATOR.lock().free(pa);
+    unsafe { FRAME_ALLOCATOR.lock().free(pa) }
 }
 
 /// Free a range of page frames.
@@ -69,7 +69,7 @@ pub(super) unsafe fn free_frame(pa: PA) {
 /// `pa` must point to a range of `count` unused page frames.
 pub(super) unsafe fn free_frames(mut pa: PA, count: usize) {
     for _ in 0..count {
-        free_frame(pa);
+        unsafe { free_frame(pa) };
         pa += PAGE_SIZE;
     }
 }

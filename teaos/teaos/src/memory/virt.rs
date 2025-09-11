@@ -35,7 +35,7 @@ global_asm!(
     phys_start = const PHYS_START.into_u64(),
 );
 
-extern "C" {
+unsafe extern "C" {
     #[link_name = "_kstack_end"]
     pub static KSTACK_END: c_void;
 }

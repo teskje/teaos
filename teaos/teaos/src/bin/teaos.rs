@@ -9,9 +9,9 @@ use teaos::log;
 /// # Safety
 ///
 /// The provided `bootinfo` must contain correct memory addresses.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe fn _start(bootinfo: &BootInfo) -> ! {
-    teaos::start(bootinfo)
+    unsafe { teaos::start(bootinfo) }
 }
 
 #[panic_handler]

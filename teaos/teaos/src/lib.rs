@@ -41,13 +41,13 @@ pub unsafe extern "C" fn start(bootinfo: &BootInfo) -> ! {
 ///
 /// The provided `bootinfo` must contain correct memory addresses.
 unsafe extern "C" fn kernel_main(bootinfo: &BootInfo) -> ! {
-    log::init(&bootinfo.uart);
+    unsafe { log::init(&bootinfo.uart) };
     log!("enterned kernel");
 
     log_bootinfo(bootinfo);
 
     exception::init();
-    memory::init(&bootinfo.memory);
+    unsafe { memory::init(&bootinfo.memory) };
 
     // TODO: reclaim boot memory
 
