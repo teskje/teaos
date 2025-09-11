@@ -6,7 +6,7 @@ use crate::uefi;
 
 #[inline(never)]
 pub fn log_args(args: fmt::Arguments) {
-    let time = aarch64::uptime();
+    let time = aarch64::uptime().as_millis();
     let mut out = uefi::console_out();
     writeln!(&mut out, "{time} [boot] {args}").unwrap();
 }

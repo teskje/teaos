@@ -42,7 +42,7 @@ pub fn write(args: fmt::Arguments) {
 
 #[inline(never)]
 pub fn log_args(args: fmt::Arguments) {
-    let time = aarch64::uptime();
+    let time = aarch64::uptime().as_millis();
     unsafe {
         let logger = &raw mut LOGGER;
         writeln!(&mut *logger, "{time} [boot] {args}").unwrap();

@@ -51,7 +51,7 @@ unsafe extern "C" fn kernel_main(bootinfo: &BootInfo) -> ! {
     memory::init(&bootinfo.memory);
 
     // TODO: reclaim boot memory
-
+    
     log!("made it to the end!");
     aarch64::halt();
 }
