@@ -15,7 +15,7 @@ mod allocator;
 mod paging;
 mod uefi;
 
-use aarch64::memory::paging::{MemoryClass, PAGE_SIZE};
+use aarch64::memory::paging::{MemoryClass, PAGE_SIZE, load_ttbr1};
 use aarch64::memory::{PA, VA};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -66,21 +66,26 @@ pub fn load() -> ! {
     // We have lost access to the boot services and any attempt to invoke one will panic.
 
     // SAFETY: Only ttbr0 translation is used up to this point.
-    unsafe { kernel.kernel_map.load_ttbr1() };
+    unsafe { load_ttbr1(&kernel.kernel_map) };
 
     let bootinfo = BootInfo {
         memory: memory_info,
         uart: uart_info,
         acpi_rsdp: PA::new(rsdp as u64),
-    };
-    (kernel.entry)(&bootinfo);
+    }
+    .into_ffi();
+
+    (kernel.entry)(bootinfo);
 }
 
 struct Kernel {
-    entry: fn(&BootInfo) -> !,
+    entry: fn(boot_info::ffi::BootInfo) -> !,
     kernel_map: PageMap,
     phys_start: VA,
 }
+
+/// Memory type used by the loader for pages containing kernel code or data.
+const KERNEL_MEMORY: uefi::sys::MEMORY_TYPE = 0x80000000;
 
 /// Load the kernel binary.
 ///
@@ -95,7 +100,7 @@ fn load_kernel() -> Kernel {
     let mut elf = ElfFile::open(kernel_file);
 
     let entry = elf.entry();
-    let entry = unsafe { mem::transmute::<usize, fn(&BootInfo) -> !>(entry) };
+    let entry = unsafe { mem::transmute::<usize, fn(boot_info::ffi::BootInfo) -> !>(entry) };
 
     let mut kernel_map = PageMap::new();
     let phdrs: Vec<_> = elf.program_headers().collect();
@@ -105,7 +110,7 @@ fn load_kernel() -> Kernel {
         }
 
         let size = phdr.memory_size() as usize;
-        let buffer = uefi::allocate_page_memory(size);
+        let buffer = uefi::allocate_page_memory(size, KERNEL_MEMORY);
         elf.read_segment(&phdr, buffer);
 
         let pa = PA::new(buffer.as_ptr() as u64);
@@ -151,7 +156,9 @@ fn create_phys_mapping(kernel_map: &mut PageMap, phys_start: VA, uart_base: PA) 
         let pages = block.pages;
         let size = pages * PAGE_SIZE;
         let class = match block.type_ {
-            MemoryType::Unused | MemoryType::Boot | MemoryType::Acpi => MemoryClass::Normal,
+            MemoryType::Unused | MemoryType::Boot | MemoryType::Acpi | MemoryType::Kernel => {
+                MemoryClass::Normal
+            }
             MemoryType::Mmio => MemoryClass::Device,
         };
         kernel_map.map_region(va, pa, size, class);
@@ -234,7 +241,7 @@ unsafe fn find_uart(rsdp_ptr: *mut acpi::RSDP) -> boot_info::Uart {
 /// Exit the UEFI boot services.
 ///
 /// Returns information about the physical memory in the system.
-fn exit_boot_services() -> boot_info::Memory {
+fn exit_boot_services() -> boot_info::Memory<'static> {
     let (buffer_size, desc_size) = uefi::get_memory_map_size();
     let len = buffer_size / desc_size;
 
@@ -270,6 +277,7 @@ fn memory_bootinfo_from_uefi(
         | RuntimeServicesData => MemoryType::Boot,
         ACPIReclaimMemory | ACPIMemoryNVS => MemoryType::Acpi,
         MemoryMappedIO | MemoryMappedIOPortSpace => MemoryType::Mmio,
+        KERNEL_MEMORY => MemoryType::Kernel,
         ReservedMemoryType | UnusableMemory | PalCode | UnacceptedMemoryType => return None,
         _ => return None,
     };

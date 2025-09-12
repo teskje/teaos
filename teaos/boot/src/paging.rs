@@ -10,7 +10,7 @@ pub(crate) struct UefiAlloc;
 impl FrameAlloc for UefiAlloc {
     fn alloc_frame() -> PA {
         // `allocate_page` zero-fills the returned page
-        let buffer = uefi::allocate_page();
+        let buffer = uefi::allocate_page(uefi::sys::LoaderData);
         PA::new(buffer.as_mut_ptr() as u64)
     }
 }

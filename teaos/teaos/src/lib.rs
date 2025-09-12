@@ -24,7 +24,7 @@ use crate::memory::KSTACK_END;
 ///
 /// The provided `bootinfo` must contain correct memory addresses.
 #[unsafe(naked)]
-pub unsafe extern "C" fn start(bootinfo: &BootInfo) -> ! {
+pub unsafe extern "C" fn start(bootinfo: boot_info::ffi::BootInfo) -> ! {
     naked_asm!(
         r#"
         ldr x9, ={kstack_end}
@@ -42,22 +42,26 @@ pub unsafe extern "C" fn start(bootinfo: &BootInfo) -> ! {
 /// # Safety
 ///
 /// The provided `bootinfo` must contain correct memory addresses.
-unsafe extern "C" fn kernel_main(bootinfo: &BootInfo) -> ! {
-    unsafe { log::init(&bootinfo.uart) };
-    log!("enterned kernel");
+unsafe extern "C" fn kernel_main(bootinfo: boot_info::ffi::BootInfo) -> ! {
+    // SAFETY: `bootinfo` references boot memory, which is valid until `memory::init` runs, which
+    //         invalidates it by reclaiming all boot memory.
+    unsafe {
+        let bootinfo = BootInfo::from_ffi(bootinfo);
 
-    log_bootinfo(bootinfo);
+        log::init(bootinfo.uart);
+        log!("enterned kernel");
 
-    exception::init();
-    unsafe { memory::init(&bootinfo.memory) };
+        log_bootinfo(&bootinfo);
 
-    // TODO: reclaim boot memory
+        exception::init();
+        memory::init(bootinfo.memory);
+    }
 
     log!("made it to the end!");
     aarch64::halt();
 }
 
-fn log_bootinfo(bootinfo: &BootInfo) {
+fn log_bootinfo(bootinfo: &BootInfo<'_>) {
     let BootInfo {
         memory,
         uart,
@@ -67,7 +71,7 @@ fn log_bootinfo(bootinfo: &BootInfo) {
     log!("bootinfo.memory:");
     log!("     start        pages    type");
     log!("  ------------------------------");
-    for block in &memory.blocks {
+    for block in memory.blocks {
         log!("  {:#012}  {:8}  {}", block.start, block.pages, block.type_);
     }
     log!("bootinfo.uart: {uart:?}");

@@ -3,14 +3,13 @@
 
 use core::panic::PanicInfo;
 
-use boot_info::BootInfo;
 use teaos::log;
 
 /// # Safety
 ///
 /// The provided `bootinfo` must contain correct memory addresses.
 #[unsafe(no_mangle)]
-pub unsafe fn _start(bootinfo: &BootInfo) -> ! {
+pub unsafe fn _start(bootinfo: boot_info::ffi::BootInfo) -> ! {
     unsafe { teaos::start(bootinfo) }
 }
 

@@ -165,41 +165,6 @@ where
             }
         });
     }
-
-    /// Load this page map into TTBR1.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure no concurrent writers to the relevant system registers exist, and
-    /// all existing mappings still required by existing threads are also present in the new
-    /// mappings.
-    pub unsafe fn load_ttbr1(&self) {
-        let mut tcr = TCR_EL1::read();
-        tcr.set_T1SZ(16);
-        tcr.set_EPD1(0);
-        tcr.set_IRGN1(0b01); // (normal memory, WBWA cacheable)
-        tcr.set_ORGN1(0b01); // (normal memory, WBWA cacheable)
-        tcr.set_SH1(0b11); // (inner shareable)
-        tcr.set_TG1(0b10); // (4 KiB)
-
-        // Make previous translation table writes visible.
-        dsb_ishst();
-
-        unsafe {
-            TTBR1_EL1::write(self.root);
-            TCR_EL1::write(tcr);
-        }
-
-        // Make sure all subsequent instructions use the new translation tables.
-        isb();
-
-        // Invalidate all EL1 TLB entries.
-        tlbi_vmalle1is();
-
-        // Wait for TLBI to complete and refetch.
-        dsb_ish();
-        isb();
-    }
 }
 
 /// Trait for page frame allocators.
@@ -329,6 +294,63 @@ impl MairIndexes {
 enum Shareability {
     Inner = 0b11,
     Outer = 0b10,
+}
+
+/// Load a page map into TTBR1.
+///
+/// # Safety
+///
+/// The caller must ensure no concurrent writers to the relevant system registers exist, and all
+/// existing mappings still required by existing threads are also present in the new mappings.
+pub unsafe fn load_ttbr1<A, M>(map: &PageMap<A, M>) {
+    let mut tcr = TCR_EL1::read();
+    tcr.set_T1SZ(16);
+    tcr.set_EPD1(0);
+    tcr.set_IRGN1(0b01); // (normal memory, WBWA cacheable)
+    tcr.set_ORGN1(0b01); // (normal memory, WBWA cacheable)
+    tcr.set_SH1(0b11); // (inner shareable)
+    tcr.set_TG1(0b10); // (4 KiB)
+
+    // Make previous translation table writes visible.
+    dsb_ishst();
+
+    unsafe {
+        TTBR1_EL1::write(map.root);
+        TCR_EL1::write(tcr);
+    }
+
+    // Make sure all subsequent instructions use the new translation tables.
+    isb();
+
+    // Invalidate all EL1 TLB entries.
+    tlbi_vmalle1is();
+
+    // Wait for TLBI to complete and refetch.
+    dsb_ish();
+    isb();
+}
+
+/// Disable address translation using TTBR0.
+///
+/// # Safety
+///
+/// The caller must ensure no concurrent writers to the relevant system registers exist, and no
+/// TTBR0 mappings are still required by existing threads.
+pub unsafe fn disable_ttbr0() {
+    let mut tcr = TCR_EL1::read();
+    tcr.set_EPD0(1);
+
+    unsafe { TCR_EL1::write(tcr) };
+
+    // Make sure all subsequent instructions observe the change.
+    isb();
+
+    // Invalidate all EL1 TLB entries.
+    tlbi_vmalle1is();
+
+    // Wait for TLBI to complete and refetch.
+    dsb_ish();
+    isb();
 }
 
 pub fn tlb_invalidate(mut va: VA, size: usize) {

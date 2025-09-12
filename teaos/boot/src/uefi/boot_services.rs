@@ -74,11 +74,11 @@ impl BootServices {
         unsafe { FileSystem::new(ptr.cast()) }
     }
 
-    pub fn allocate_pages(&self, pages: usize) -> *mut u8 {
+    pub fn allocate_pages(&self, pages: usize, memory_type: sys::MEMORY_TYPE) -> *mut u8 {
         let allocate_pages = unsafe { (**self.ptr).allocate_pages };
 
         let mut address = 0;
-        let status = allocate_pages(sys::AllocateAnyPages, sys::LoaderData, pages, &mut address);
+        let status = allocate_pages(sys::AllocateAnyPages, memory_type, pages, &mut address);
         assert_eq!(status, sys::SUCCESS);
 
         address as *mut u8

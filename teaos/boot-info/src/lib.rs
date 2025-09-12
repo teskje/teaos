@@ -6,6 +6,8 @@
 
 extern crate alloc;
 
+pub mod ffi;
+
 use alloc::vec::Vec;
 use core::fmt;
 
@@ -13,9 +15,9 @@ use aarch64::memory::PA;
 use aarch64::memory::paging::PAGE_SIZE;
 
 #[derive(Debug)]
-pub struct BootInfo {
+pub struct BootInfo<'boot> {
     /// Map of physical memory blocks and their usage.
-    pub memory: Memory,
+    pub memory: Memory<'boot>,
     /// Info about the UART device that provides the serial console.
     ///
     /// This information can be retrieved from the ACPI structures, but the boot loader provides it
@@ -26,11 +28,11 @@ pub struct BootInfo {
 }
 
 #[derive(Debug)]
-pub struct Memory {
-    pub blocks: Vec<MemoryBlock>,
+pub struct Memory<'boot> {
+    pub blocks: &'boot [MemoryBlock],
 }
 
-impl Memory {
+impl<'boot> Memory<'boot> {
     pub fn new(mut blocks: Vec<MemoryBlock>) -> Self {
         // Cleanup: Merge consecutive blocks of the same type.
         blocks.sort_unstable_by_key(|b| b.start);
@@ -51,11 +53,14 @@ impl Memory {
             }
         }
 
-        Self { blocks }
+        Self {
+            blocks: blocks.leak(),
+        }
     }
 }
 
-#[derive(Debug)]
+#[repr(C)]
+#[derive(Clone, Debug)]
 pub struct MemoryBlock {
     pub type_: MemoryType,
     pub start: PA,
@@ -78,6 +83,8 @@ pub enum MemoryType {
     Acpi,
     /// Memory containing memory-maped I/O registers.
     Mmio,
+    /// Memory containing kernel code and data.
+    Kernel,
 }
 
 impl fmt::Display for MemoryType {
@@ -87,11 +94,13 @@ impl fmt::Display for MemoryType {
             Self::Boot => "loader",
             Self::Acpi => "acpi",
             Self::Mmio => "mmio",
+            Self::Kernel => "kernel",
         };
         f.write_str(s)
     }
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub enum Uart {
     Pl011 { base: PA },

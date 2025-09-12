@@ -1,5 +1,5 @@
 use aarch64::instruction::{dsb_ishst, isb};
-use aarch64::memory::paging::{AddrMapper, FrameAlloc, MemoryClass, PAGE_SIZE};
+use aarch64::memory::paging::{load_ttbr1, AddrMapper, FrameAlloc, MemoryClass, PAGE_SIZE};
 use aarch64::memory::{PA, VA};
 use aarch64::register::TTBR1_EL1;
 use kstd::sync::Mutex;
@@ -51,7 +51,7 @@ pub(super) fn init() {
     kernel_map.clone_from(&boot_map);
 
     // SAFETY: New map contains all existing mappings.
-    unsafe { kernel_map.load_ttbr1() };
+    unsafe { load_ttbr1(&kernel_map) };
 
     *active = Some(kernel_map);
 }

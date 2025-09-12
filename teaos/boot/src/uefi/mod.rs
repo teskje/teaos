@@ -110,8 +110,8 @@ pub fn config_table() -> ConfigTable {
     Uefi::borrow(|uefi| uefi.config_table())
 }
 
-pub fn allocate_page() -> &'static mut [u8; PAGE_SIZE] {
-    let ptr = boot_services().allocate_pages(1);
+pub fn allocate_page(memory_type: sys::MEMORY_TYPE) -> &'static mut [u8; PAGE_SIZE] {
+    let ptr = boot_services().allocate_pages(1, memory_type);
     let ptr = ptr as *mut [u8; PAGE_SIZE];
     let buffer = unsafe { &mut *ptr };
 
@@ -121,12 +121,12 @@ pub fn allocate_page() -> &'static mut [u8; PAGE_SIZE] {
     buffer
 }
 
-pub fn allocate_page_memory(size: usize) -> &'static mut [u8] {
+pub fn allocate_page_memory(size: usize, memory_type: sys::MEMORY_TYPE) -> &'static mut [u8] {
     // Round up to page size.
     let size = (size + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
     let pages = size / PAGE_SIZE;
 
-    let ptr = boot_services().allocate_pages(pages);
+    let ptr = boot_services().allocate_pages(pages, memory_type);
     let buffer = unsafe { slice::from_raw_parts_mut(ptr, size) };
 
     // Zero the page memory.
