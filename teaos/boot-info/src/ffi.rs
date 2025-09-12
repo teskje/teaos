@@ -30,6 +30,9 @@ impl super::BootInfo<'_> {
         }
     }
 
+    /// # Safety
+    ///
+    /// All pointers in `ffi` must be valid.
     pub unsafe fn from_ffi(ffi: BootInfo) -> Self {
         let memory = unsafe { super::Memory::from_ffi(ffi.memory) };
 
@@ -49,6 +52,9 @@ impl super::Memory<'_> {
         }
     }
 
+    /// # Safety
+    ///
+    /// All pointers in `ffi` must be valid.
     pub unsafe fn from_ffi(ffi: Memory) -> Self {
         let blocks = unsafe { slice::from_raw_parts(ffi.blocks_ptr, ffi.blocks_len) };
 

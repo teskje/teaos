@@ -13,10 +13,6 @@ macro_rules! system_register {
         pub struct $name(u64);
 
         impl $name {
-            pub fn new() -> Self {
-                Self(0)
-            }
-
             pub fn read() -> Self {
                 let value: u64;
                 unsafe {
@@ -29,6 +25,10 @@ macro_rules! system_register {
                 Self(value)
             }
 
+            /// # Safety
+            ///
+            /// Writing to a system register potentially changes the execution context. All running
+            /// code must be prepared to deal with the consequences of these changes.
             pub unsafe fn write<V: Into<u64>>(value: V) {
                 unsafe {
                     asm!(
@@ -57,6 +57,12 @@ macro_rules! system_register {
                         self.0 |= x << $a;
                     }
                 )*
+            }
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self(0)
             }
         }
 
