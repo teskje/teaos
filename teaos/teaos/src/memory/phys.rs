@@ -1,5 +1,5 @@
-use aarch64::memory::paging::PAGE_SIZE;
 use aarch64::memory::PA;
+use aarch64::memory::paging::PAGE_SIZE;
 use kstd::sync::Mutex;
 
 use crate::memory::pa_to_va;
@@ -24,7 +24,11 @@ impl FrameAllocator {
         let va = pa_to_va(pa);
 
         let next_pa = unsafe { va.as_mut_ptr::<PA>().read() };
-        self.freelist = Some(next_pa);
+        if next_pa == PA::new(0) {
+            self.freelist = None
+        } else {
+            self.freelist = Some(next_pa);
+        }
 
         pa
     }

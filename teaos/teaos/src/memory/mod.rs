@@ -1,16 +1,12 @@
 //! Memory management support.
 
+mod heap;
 mod paging;
 mod phys;
 mod virt;
 
-use aarch64::memory::PA;
-use aarch64::register::TTBR1_EL1;
-use boot::info;
-use phys::{alloc_frame, free_frames};
-
 use crate::log;
-use crate::memory::paging::PageMap;
+use crate::memory::phys::{alloc_frame, free_frames};
 
 pub use virt::{KSTACK_END, pa_to_va};
 
@@ -18,36 +14,16 @@ pub use virt::{KSTACK_END, pa_to_va};
 ///
 /// Here we seed the frame allocator, take over the kernel translation tables, and initialize the
 /// heap allocator, unlocking use of the `alloc` crate.
-pub unsafe fn init(info: &info::Memory) {
+pub unsafe fn init(info: &boot_info::Memory) {
     log!("initializing memory management");
 
     log!("  seeding frame allocator with unused blocks");
     for block in &info.blocks {
-        if block.type_ == info::MemoryType::Unused {
+        if block.type_ == boot_info::MemoryType::Unused {
             unsafe { free_frames(block.start, block.pages) };
         }
     }
 
-    init_translation_tables();
-}
-
-/// Initialize kernel translation tables.
-///
-/// This takes over the kernel (TTBR1) translation tables from the boot loader by cloning them into
-/// a new set of tables and then switching over to those. Doing so allows us to later free all boot
-/// loader memory without having to make exceptions for the translation tables.
-fn init_translation_tables() {
-    log!("  initializing kernel translation tables");
-
-    let ttbr = TTBR1_EL1::read();
-    let boot_ttb = PA::new(ttbr.BADDR() << 1);
-    let boot_map = PageMap::with_root(boot_ttb);
-
-    let mut kernel_map = PageMap::new();
-    kernel_map.clone_from(&boot_map);
-
-    // SAFETY: New map contains all existing mappings.
-    unsafe { kernel_map.load_ttbr1() };
-
-    // TODO init global state
+    log!("  initializing kernel paging");
+    paging::init();
 }

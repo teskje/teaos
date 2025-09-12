@@ -2,6 +2,8 @@
 
 #![cfg_attr(not(test), no_std)]
 
+extern crate alloc;
+
 pub mod log;
 
 mod exception;
@@ -10,7 +12,7 @@ mod uart;
 
 use core::arch::naked_asm;
 
-use boot::info::BootInfo;
+use boot_info::BootInfo;
 
 use crate::memory::KSTACK_END;
 

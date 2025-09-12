@@ -8,7 +8,6 @@
 
 extern crate alloc;
 
-pub mod info;
 pub mod log;
 
 mod acpi;
@@ -20,11 +19,11 @@ use aarch64::memory::paging::{MemoryClass, PAGE_SIZE};
 use aarch64::memory::{PA, VA};
 use alloc::vec;
 use alloc::vec::Vec;
+use boot_info::{BootInfo, MemoryType};
 use core::ffi::c_void;
 use core::mem;
 use elf::ElfFile;
 
-use crate::info::{BootInfo, MemoryType};
 use crate::paging::PageMap;
 
 /// Initialize the UEFI wrapper.
@@ -143,15 +142,15 @@ fn create_phys_mapping(kernel_map: &mut PageMap, phys_start: VA, uart_base: PA) 
     let memory_map = uefi::get_memory_map(buffer);
 
     for desc in memory_map.iter() {
-        let Ok(memory_type) = MemoryType::try_from(desc.type_) else {
+        let Some(block) = memory_bootinfo_from_uefi(desc) else {
             continue;
         };
 
-        let pa = PA::new(desc.physical_start);
-        let va = phys_start + desc.physical_start;
-        let pages = usize::try_from(desc.number_of_pages).unwrap();
+        let pa = block.start;
+        let va = phys_start + pa.into_u64();
+        let pages = block.pages;
         let size = pages * PAGE_SIZE;
-        let class = match memory_type {
+        let class = match block.type_ {
             MemoryType::Unused | MemoryType::Boot | MemoryType::Acpi => MemoryClass::Normal,
             MemoryType::Mmio => MemoryClass::Device,
         };
@@ -188,7 +187,7 @@ fn find_acpi_rsdp() -> *mut acpi::RSDP {
 /// # Safety
 ///
 /// `rsdp` must be a valid pointer to an [`acpi::RSDP`].
-unsafe fn find_uart(rsdp_ptr: *mut acpi::RSDP) -> info::Uart {
+unsafe fn find_uart(rsdp_ptr: *mut acpi::RSDP) -> boot_info::Uart {
     let rsdp = unsafe { &*rsdp_ptr };
 
     assert_eq!(rsdp.signature, *b"RSD PTR ");
@@ -226,8 +225,8 @@ unsafe fn find_uart(rsdp_ptr: *mut acpi::RSDP) -> info::Uart {
     let base = spcr.base_address.address;
 
     match spcr.interface_type {
-        acpi::UART_TYPE_16550 => info::Uart::Uart16550 { base },
-        acpi::UART_TYPE_PL011 => info::Uart::Pl011 { base },
+        acpi::UART_TYPE_16550 => boot_info::Uart::Uart16550 { base },
+        acpi::UART_TYPE_PL011 => boot_info::Uart::Pl011 { base },
         value => unimplemented!("UART type: {value:#x}"),
     }
 }
@@ -235,7 +234,7 @@ unsafe fn find_uart(rsdp_ptr: *mut acpi::RSDP) -> info::Uart {
 /// Exit the UEFI boot services.
 ///
 /// Returns information about the physical memory in the system.
-fn exit_boot_services() -> info::Memory {
+fn exit_boot_services() -> boot_info::Memory {
     let (buffer_size, desc_size) = uefi::get_memory_map_size();
     let len = buffer_size / desc_size;
 
@@ -248,12 +247,7 @@ fn exit_boot_services() -> info::Memory {
     uefi::exit_boot_services(memory_map.map_key);
 
     for desc in memory_map.iter() {
-        if let Ok(type_) = desc.type_.try_into() {
-            let block = info::MemoryBlock {
-                type_,
-                start: desc.physical_start.into(),
-                pages: desc.number_of_pages as usize,
-            };
+        if let Some(block) = memory_bootinfo_from_uefi(desc) {
             block_info.push(block);
         }
     }
@@ -261,7 +255,31 @@ fn exit_boot_services() -> info::Memory {
     // We can't deallocate anymore, so we must avoid dropping the `MemoryMap`.
     mem::forget(memory_map);
 
-    info::Memory::new(block_info)
+    boot_info::Memory::new(block_info)
+}
+
+fn memory_bootinfo_from_uefi(
+    desc: &uefi::sys::MEMORY_DESCRIPTOR,
+) -> Option<boot_info::MemoryBlock> {
+    use uefi::sys::*;
+
+    #[allow(non_upper_case_globals)]
+    let type_ = match desc.type_ {
+        ConventionalMemory | PersistentMemory => MemoryType::Unused,
+        LoaderCode | LoaderData | BootServicesCode | BootServicesData | RuntimeServicesCode
+        | RuntimeServicesData => MemoryType::Boot,
+        ACPIReclaimMemory | ACPIMemoryNVS => MemoryType::Acpi,
+        MemoryMappedIO | MemoryMappedIOPortSpace => MemoryType::Mmio,
+        ReservedMemoryType | UnusableMemory | PalCode | UnacceptedMemoryType => return None,
+        _ => return None,
+    };
+
+    let block = boot_info::MemoryBlock {
+        type_,
+        start: desc.physical_start.into(),
+        pages: desc.number_of_pages as usize,
+    };
+    Some(block)
 }
 
 /// Validate the given pointer.

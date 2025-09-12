@@ -1,12 +1,16 @@
-//! The [`BootInfo`] passed to the kernel once loading is complete.
+//! The [`BootInfo`] passed from the boot loader to the kernel once loading is complete.
+//!
+//! This lives in its own crate so the kernel doesn't need to depend on the boot loader directly.
 
+#![no_std]
+
+extern crate alloc;
+
+use alloc::vec::Vec;
 use core::fmt;
 
-use aarch64::memory::paging::PAGE_SIZE;
 use aarch64::memory::PA;
-use alloc::vec::Vec;
-
-use crate::uefi;
+use aarch64::memory::paging::PAGE_SIZE;
 
 #[derive(Debug)]
 pub struct BootInfo {
@@ -27,7 +31,7 @@ pub struct Memory {
 }
 
 impl Memory {
-    pub(crate) fn new(mut blocks: Vec<MemoryBlock>) -> Self {
+    pub fn new(mut blocks: Vec<MemoryBlock>) -> Self {
         // Cleanup: Merge consecutive blocks of the same type.
         blocks.sort_unstable_by_key(|b| b.start);
 
@@ -85,25 +89,6 @@ impl fmt::Display for MemoryType {
             Self::Mmio => "mmio",
         };
         f.write_str(s)
-    }
-}
-
-impl TryFrom<uefi::sys::MEMORY_TYPE> for MemoryType {
-    type Error = ();
-
-    fn try_from(type_: uefi::sys::MEMORY_TYPE) -> Result<Self, Self::Error> {
-        use uefi::sys::*;
-
-        #[allow(non_upper_case_globals)]
-        match type_ {
-            ConventionalMemory | PersistentMemory => Ok(MemoryType::Unused),
-            LoaderCode | LoaderData | BootServicesCode | BootServicesData | RuntimeServicesCode
-            | RuntimeServicesData => Ok(MemoryType::Boot),
-            ACPIReclaimMemory | ACPIMemoryNVS => Ok(MemoryType::Acpi),
-            MemoryMappedIO | MemoryMappedIOPortSpace => Ok(MemoryType::Mmio),
-            ReservedMemoryType | UnusableMemory | PalCode | UnacceptedMemoryType => Err(()),
-            _ => Err(()),
-        }
     }
 }
 

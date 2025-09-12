@@ -494,9 +494,17 @@ name = "boot"
 version = "0.1.0"
 dependencies = [
  "aarch64",
+ "boot-info",
  "crc 0.1.0",
  "elf",
  "kstd",
+]
+
+[[package]]
+name = "boot-info"
+version = "0.1.0"
+dependencies = [
+ "aarch64",
 ]
 
 [[package]]
@@ -1524,7 +1532,7 @@ name = "teaos"
 version = "0.1.0"
 dependencies = [
  "aarch64",
- "boot",
+ "boot-info",
  "kstd",
 ]
 

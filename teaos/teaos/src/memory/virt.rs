@@ -15,6 +15,8 @@ use aarch64::memory::{PA, VA};
 pub const KERNEL_START: VA = VA::new(0xffff000000000000);
 pub const KSTACK_START: VA = VA::new(0xffff000040000000);
 pub const KSTACK_SIZE: usize = 16 << 10;
+pub const KHEAP_START: VA = VA::new(0xffff000080000000);
+pub const KHEAP_SIZE: usize = 2 << 30;
 pub const PHYS_START: VA = VA::new(0xffff100000000000);
 
 global_asm!(

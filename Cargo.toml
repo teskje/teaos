@@ -2,6 +2,7 @@
 members = [
     "teaos/aarch64",
     "teaos/boot",
+    "teaos/boot-info",
     "teaos/crc",
     "teaos/elf",
     "teaos/kstd",

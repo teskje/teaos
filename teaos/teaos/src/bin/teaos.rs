@@ -3,7 +3,7 @@
 
 use core::panic::PanicInfo;
 
-use boot::info::BootInfo;
+use boot_info::BootInfo;
 use teaos::log;
 
 /// # Safety
