@@ -123,24 +123,31 @@ impl FreeList {
 
     fn insert(&mut self, ptr: NonNull<u8>, size: usize) {
         debug_assert!(size >= mem::size_of::<FreeBlock>());
-        let new_block_ptr = ptr.cast();
+        let mut new_block_ptr = ptr.cast();
 
-        let mut head = &mut self.head;
-        while let Some(mut block_ptr) = *head {
+        // Find the insertion point, according to address order. Also keep track of the previous
+        // block, we might need it for coalescing.
+        let mut prev = None;
+        let mut this = &mut self.head;
+        while let Some(mut block_ptr) = *this {
             if block_ptr > new_block_ptr {
                 break;
             }
 
             let block = unsafe { block_ptr.as_mut() };
-            head = &mut block.next;
+            this = &mut block.next;
+            prev = Some(block_ptr);
         }
 
-        unsafe {
-            new_block_ptr.write(FreeBlock { size, next: *head });
-        }
-        *head = Some(new_block_ptr);
+        // Insert the new block.
+        unsafe { new_block_ptr.write(FreeBlock { size, next: *this }) };
+        *this = Some(new_block_ptr);
 
-        // TODO coalesce
+        // Coalesce with neighbors, if possible.
+        unsafe { new_block_ptr.as_mut().try_coalesce() };
+        if let Some(mut prev_ptr) = prev {
+            unsafe { prev_ptr.as_mut().try_coalesce() };
+        }
     }
 }
 
@@ -155,6 +162,24 @@ fn round_up_page(x: usize) -> usize {
 struct FreeBlock {
     size: usize,
     next: Option<NonNull<FreeBlock>>,
+}
+
+impl FreeBlock {
+    /// Coalesce this block with the next one, if possible.
+    fn try_coalesce(&mut self) {
+        let Some(next_start) = self.next else {
+            return;
+        };
+
+        let this_start = NonNull::from_mut(self);
+        let this_end = unsafe { this_start.byte_add(self.size) };
+
+        if this_end == next_start {
+            let next = unsafe { next_start.as_ref() };
+            self.size += next.size;
+            self.next = next.next;
+        }
+    }
 }
 
 struct LockedHeapAllocator(Mutex<HeapAllocator>);
