@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "teaos/aarch64",
+    "teaos/acpi",
     "teaos/boot",
     "teaos/boot-info",
     "teaos/crc",

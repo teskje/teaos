@@ -10,7 +10,6 @@ extern crate alloc;
 
 pub mod log;
 
-mod acpi;
 mod allocator;
 mod paging;
 mod uefi;
@@ -200,13 +199,13 @@ unsafe fn find_uart(rsdp_ptr: *mut acpi::RSDP) -> boot_info::Uart {
     assert_eq!(rsdp.signature, *b"RSD PTR ");
     assert_eq!(rsdp.revision, 2);
 
-    let xsdt_ptr = rsdp.xsdt_address;
+    let xsdt_ptr = rsdp.xsdt_address as *const acpi::XSDT;
     let xsdt = unsafe { &*xsdt_ptr };
     assert_eq!(xsdt.header.signature, *b"XSDT");
     assert_eq!(xsdt.header.revision, 1);
 
     let xsdt_size = xsdt.header.length as usize;
-    let mut entry_size = xsdt_size - mem::size_of::<acpi::XSDT>();
+    let mut entry_size = xsdt_size - mem::offset_of!(acpi::XSDT, entry);
     let mut entry_ptr = xsdt.entry.as_ptr();
 
     let mut spcr: Option<&acpi::SPCR> = None;
@@ -229,7 +228,7 @@ unsafe fn find_uart(rsdp_ptr: *mut acpi::RSDP) -> boot_info::Uart {
     let spcr = spcr.expect("SPCR table present");
     assert_eq!(spcr.header.revision, 2);
 
-    let base = spcr.base_address.address;
+    let base = PA::new(spcr.base_address.address);
 
     match spcr.interface_type {
         acpi::UART_TYPE_16550 => boot_info::Uart::Uart16550 { base },

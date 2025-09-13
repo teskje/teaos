@@ -10,6 +10,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "acpi"
+version = "0.1.0"
+
+[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -494,6 +498,7 @@ name = "boot"
 version = "0.1.0"
 dependencies = [
  "aarch64",
+ "acpi",
  "boot-info",
  "crc 0.1.0",
  "elf",
@@ -1532,6 +1537,7 @@ name = "teaos"
 version = "0.1.0"
 dependencies = [
  "aarch64",
+ "acpi",
  "boot-info",
  "kstd",
 ]

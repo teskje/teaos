@@ -4,14 +4,12 @@
 //!
 //! [ACPI]: https://uefi.org/sites/default/files/resources/ACPI_Spec_6_5_Aug29.pdf
 
-#![allow(dead_code)]
+#![no_std]
 #![allow(non_camel_case_types)]
 #![allow(clippy::upper_case_acronyms)]
 
 // 5.2 ACPI System Description Tables
 // ----------------------------------
-
-use aarch64::memory::PA;
 
 #[repr(C, packed)]
 pub struct GAS {
@@ -19,7 +17,7 @@ pub struct GAS {
     pub register_bit_width: u8,
     pub register_bit_offset: u8,
     pub access_size: u8,
-    pub address: PA,
+    pub address: u64,
 }
 
 #[repr(C, packed)]
@@ -30,7 +28,7 @@ pub struct RSDP {
     pub revision: u8,
     pub rsdt_address: u32,
     pub length: u32,
-    pub xsdt_address: *mut XSDT,
+    pub xsdt_address: u64,
     pub extended_checksum: u8,
     reserved: [u8; 3],
 }
@@ -84,3 +82,19 @@ pub struct SPCR {
 
 pub const UART_TYPE_16550: u8 = 0x00;
 pub const UART_TYPE_PL011: u8 = 0x03;
+
+#[repr(C, packed)]
+pub struct MCFG {
+    pub header: DESCRIPTION_HEADER,
+    reserved: [u8; 8],
+    pub allocations: [u8; 0],
+}
+
+#[repr(C, packed)]
+pub struct MCFG_Allocation {
+    pub base_address: u64,
+    pub segment: u16,
+    pub start_bus_number: u8,
+    pub end_bus_number: u8,
+    reserved: [u8; 4],
+}

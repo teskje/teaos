@@ -12,6 +12,7 @@ use aarch64::memory::paging::disable_ttbr0;
 use boot_info::MemoryType;
 
 pub use self::virt::{KSTACK_END, pa_to_va};
+pub use self::paging::map_page;
 
 /// Initialize the memory subsystem.
 ///

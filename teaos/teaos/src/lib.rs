@@ -8,13 +8,14 @@ pub mod log;
 
 mod exception;
 mod memory;
+mod pci;
 mod uart;
 
 use core::arch::naked_asm;
 
 use boot_info::BootInfo;
 
-use crate::memory::KSTACK_END;
+use crate::memory::{pa_to_va, KSTACK_END};
 
 /// The kernel entry point.
 ///
@@ -43,6 +44,8 @@ pub unsafe extern "C" fn start(bootinfo: boot_info::ffi::BootInfo) -> ! {
 ///
 /// The provided `bootinfo` must contain correct memory addresses.
 unsafe extern "C" fn kernel_main(bootinfo: boot_info::ffi::BootInfo) -> ! {
+    let acpi_rsdp_ptr;
+
     // SAFETY: `bootinfo` references boot memory, which is valid until `memory::init` runs, which
     //         invalidates it by reclaiming all boot memory.
     unsafe {
@@ -53,9 +56,13 @@ unsafe extern "C" fn kernel_main(bootinfo: boot_info::ffi::BootInfo) -> ! {
 
         log_bootinfo(&bootinfo);
 
+        acpi_rsdp_ptr = pa_to_va(bootinfo.acpi_rsdp).as_ptr();
+
         exception::init();
         memory::init(bootinfo.memory);
     }
+
+    unsafe { pci::discover(acpi_rsdp_ptr) };
 
     log!("made it to the end!");
     aarch64::halt();

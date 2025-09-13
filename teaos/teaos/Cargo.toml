@@ -10,5 +10,6 @@ harness = false
 
 [dependencies]
 aarch64 = { path = "../aarch64" }
+acpi = { path = "../acpi" }
 boot-info = { path = "../boot-info" }
 kstd = { path = "../kstd" }
