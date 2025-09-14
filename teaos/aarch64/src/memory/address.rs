@@ -1,7 +1,7 @@
 use core::fmt::{self, LowerHex};
 use core::ops::{Add, AddAssign};
 
-use super::paging::PAGE_SIZE;
+use super::PAGE_SIZE;
 
 /// Type for physical memory addresses.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -42,7 +42,7 @@ impl From<PA> for u64 {
 
 impl fmt::Debug for PA {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "PA({self})")
+        write!(f, "PA({self:#})")
     }
 }
 
@@ -109,6 +109,12 @@ impl VA {
     pub const fn as_mut_ptr<T>(&self) -> *mut T {
         self.0 as *mut _
     }
+
+    pub const fn page_table_idx(&self, level: u64) -> usize {
+        let shift = 39 - 9 * level;
+        let idx = (self.0 >> shift) & 0x1ff;
+        idx as usize
+    }
 }
 
 impl From<u64> for VA {
@@ -131,7 +137,7 @@ impl From<VA> for u64 {
 
 impl fmt::Debug for VA {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "VA({self})")
+        write!(f, "VA({self:#})")
     }
 }
 

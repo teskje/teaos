@@ -14,8 +14,7 @@ mod allocator;
 mod paging;
 mod uefi;
 
-use aarch64::memory::paging::{MemoryClass, PAGE_SIZE, load_ttbr1};
-use aarch64::memory::{Frame, PA, Page, VA};
+use aarch64::memory::{PA, PAGE_SIZE, VA};
 use alloc::vec;
 use alloc::vec::Vec;
 use boot_info::{BootInfo, MemoryType};
@@ -23,7 +22,7 @@ use core::ffi::c_void;
 use core::mem;
 use elf::ElfFile;
 
-use crate::paging::PageMap;
+use crate::paging::KernelPager;
 
 /// Initialize the UEFI wrapper.
 ///
@@ -56,7 +55,7 @@ pub fn load() -> ! {
 
     log!("creating phys mapping");
     let uart_base = uart_info.base();
-    create_phys_mapping(&mut kernel.kernel_map, kernel.phys_start, uart_base);
+    create_phys_mapping(&mut kernel.pager, kernel.phys_start, uart_base);
 
     log!("exiting boot services");
     let memory_info = exit_boot_services();
@@ -64,8 +63,7 @@ pub fn load() -> ! {
     // No (de)allocating or logging beyond this point!
     // We have lost access to the boot services and any attempt to invoke one will panic.
 
-    // SAFETY: Only ttbr0 translation is used up to this point.
-    unsafe { load_ttbr1(&kernel.kernel_map) };
+    kernel.pager.apply();
 
     let bootinfo = BootInfo {
         memory: memory_info,
@@ -79,7 +77,7 @@ pub fn load() -> ! {
 
 struct Kernel {
     entry: fn(boot_info::ffi::BootInfo) -> !,
-    kernel_map: PageMap,
+    pager: KernelPager,
     phys_start: VA,
 }
 
@@ -101,7 +99,7 @@ fn load_kernel() -> Kernel {
     let entry = elf.entry();
     let entry = unsafe { mem::transmute::<usize, fn(boot_info::ffi::BootInfo) -> !>(entry) };
 
-    let mut kernel_map = PageMap::new();
+    let mut pager = KernelPager::new();
     let phdrs: Vec<_> = elf.program_headers().collect();
     for phdr in phdrs {
         if !phdr.is_load() {
@@ -114,12 +112,10 @@ fn load_kernel() -> Kernel {
 
         let pa = PA::new(buffer.as_ptr() as u64);
         let va = VA::new(phdr.virtual_address());
-        let frame = Frame::new(pa);
-        let page = Page::new(va);
         let count = buffer.len() / PAGE_SIZE;
-        let class = MemoryClass::Normal;
-        kernel_map.map_region(page, frame, count, class);
-        log!("  mapped {va:#} -> {pa:#} ({count} pages, {class:?})");
+        let type_ = MemoryType::Kernel;
+        pager.map_region(va, pa, count, type_);
+        log!("  mapped {va:#} -> {pa:#} ({count} pages)");
     }
 
     let mut phys_start = None;
@@ -136,12 +132,12 @@ fn load_kernel() -> Kernel {
 
     Kernel {
         entry,
-        kernel_map,
+        pager,
         phys_start,
     }
 }
 
-fn create_phys_mapping(kernel_map: &mut PageMap, phys_start: VA, uart_base: PA) {
+fn create_phys_mapping(pager: &mut KernelPager, phys_start: VA, uart_base: PA) {
     let (buffer_size, _) = uefi::get_memory_map_size();
     // Allocating this `Vec` may add an entry to the memory map, so we need to overprovision.
     let buffer = vec![0; buffer_size + 1024];
@@ -154,26 +150,15 @@ fn create_phys_mapping(kernel_map: &mut PageMap, phys_start: VA, uart_base: PA) 
 
         let pa = block.start;
         let va = phys_start + pa.into_u64();
-        let frame = Frame::new(pa);
-        let page = Page::new(va);
         let count = block.pages;
-        let class = match block.type_ {
-            MemoryType::Unused | MemoryType::Boot | MemoryType::Acpi | MemoryType::Kernel => {
-                MemoryClass::Normal
-            }
-            MemoryType::Mmio => MemoryClass::Device,
-        };
-        kernel_map.map_region(page, frame, count, class);
-        log!("  mapped {va:#} -> {pa:#} ({count} pages, {class:?})");
+        let type_ = block.type_;
+        pager.map_region(va, pa, count, type_);
     }
 
     // The UEFI memory map doesn't include all device MMIO regions, so map the UART one explicitly.
-    let frame = Frame::new(uart_base);
     let va = phys_start + u64::from(uart_base);
-    let page = Page::new(va);
-    let class = MemoryClass::Device;
-    kernel_map.map_page(page, frame, class);
-    log!("  mapped {va:#} -> {uart_base:#} (1 pages, {class:?})");
+    let type_ = MemoryType::Mmio;
+    pager.map_region(va, uart_base, 1, type_);
 }
 
 /// Find the ACPI RSDP in the UEFI config table.

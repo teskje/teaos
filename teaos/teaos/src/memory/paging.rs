@@ -44,7 +44,7 @@ pub(super) fn init() {
     kernel_map.clone_from(&boot_map);
 
     // SAFETY: New map contains all existing mappings.
-    unsafe { load_ttbr1(&kernel_map) };
+    unsafe { load_ttbr1(kernel_map.base()) };
 
     *active = Some(kernel_map);
 }

@@ -2,9 +2,10 @@ pub mod paging;
 
 mod address;
 
-use crate::memory::paging::PAGE_SIZE;
-
 pub use self::address::{PA, VA};
+
+pub const PAGE_SIZE: usize = 4 << 10;
+pub const PAGE_MAP_LEVELS: u64 = 3;
 
 /// A physical memory page frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

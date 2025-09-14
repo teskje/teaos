@@ -11,8 +11,7 @@ pub mod ffi;
 use alloc::vec::Vec;
 use core::fmt;
 
-use aarch64::memory::PA;
-use aarch64::memory::paging::PAGE_SIZE;
+use aarch64::memory::{PA, PAGE_SIZE};
 
 #[derive(Debug)]
 pub struct BootInfo<'boot> {

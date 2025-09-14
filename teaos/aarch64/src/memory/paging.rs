@@ -4,11 +4,7 @@ use core::mem;
 use crate::instruction::{dsb_ish, dsb_ishst, isb, tlbi_vae1is, tlbi_vmalle1is};
 use crate::register::{MAIR_EL1, TCR_EL1, TTBR1_EL1};
 
-use super::{AddrMapper, Frame, FrameAlloc, PA, Page, VA};
-
-pub const PAGE_SIZE: usize = 4 << 10;
-
-const LAST_LEVEL: u64 = 3;
+use super::{AddrMapper, Frame, FrameAlloc, PA, PAGE_MAP_LEVELS, PAGE_SIZE, Page, VA};
 
 /// Data structure for manipulating page tables.
 pub struct PageMap<Alloc, Mapper> {
@@ -35,6 +31,10 @@ where
             _frame_alloc: PhantomData,
             _addr_mapper: PhantomData,
         }
+    }
+
+    pub fn base(&self) -> PA {
+        self.root.base()
     }
 
     fn alloc_page_table() -> Frame {
@@ -104,7 +104,7 @@ where
         };
 
         let mut table_frame = self.root;
-        for level in 0..LAST_LEVEL {
+        for level in 0..PAGE_MAP_LEVELS {
             let table = unsafe { self.view_table(table_frame) };
             let idx = table_index(level);
             let mut table_desc = table[idx];
@@ -120,7 +120,7 @@ where
         }
 
         let table = unsafe { self.view_table_mut(table_frame) };
-        let idx = table_index(LAST_LEVEL);
+        let idx = table_index(PAGE_MAP_LEVELS);
         &mut table[idx]
     }
 
@@ -140,7 +140,7 @@ where
         let table = unsafe { self.view_table(table_frame) };
         for desc in table {
             if desc.valid() {
-                if level == LAST_LEVEL {
+                if level == PAGE_MAP_LEVELS {
                     f(page, *desc)
                 } else {
                     let frame = desc.output_frame();
@@ -218,13 +218,13 @@ impl Descriptor {
     }
 }
 
-struct MairIndexes {
-    device: u8,
-    normal: u8,
+pub struct MairIndexes {
+    pub device: u8,
+    pub normal: u8,
 }
 
 impl MairIndexes {
-    fn read() -> Self {
+    pub fn read() -> Self {
         let mut device = None;
         let mut normal = None;
 
@@ -253,7 +253,9 @@ impl MairIndexes {
     }
 }
 
-enum Shareability {
+#[derive(Clone, Copy, Debug)]
+pub enum Shareability {
+    None = 0b00,
     Inner = 0b11,
     Outer = 0b10,
 }
@@ -264,7 +266,7 @@ enum Shareability {
 ///
 /// The caller must ensure no concurrent writers to the relevant system registers exist, and all
 /// existing mappings still required by existing threads are also present in the new mappings.
-pub unsafe fn load_ttbr1<A, M>(map: &PageMap<A, M>) {
+pub unsafe fn load_ttbr1(ttb: PA) {
     let mut tcr = TCR_EL1::read();
     tcr.set_T1SZ(16);
     tcr.set_EPD1(0);
@@ -277,7 +279,7 @@ pub unsafe fn load_ttbr1<A, M>(map: &PageMap<A, M>) {
     dsb_ishst();
 
     unsafe {
-        TTBR1_EL1::write(map.root.base());
+        TTBR1_EL1::write(ttb);
         TCR_EL1::write(tcr);
     }
 
