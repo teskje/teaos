@@ -1,5 +1,4 @@
-use aarch64::memory::paging::{AddrMapper, FrameAlloc};
-use aarch64::memory::{PA, VA};
+use aarch64::memory::{AddrMapper, Frame, FrameAlloc, PA, VA};
 
 use crate::uefi;
 
@@ -8,10 +7,10 @@ pub(crate) type PageMap = aarch64::memory::paging::PageMap<UefiAlloc, IdMapper>;
 pub(crate) struct UefiAlloc;
 
 impl FrameAlloc for UefiAlloc {
-    fn alloc_frame() -> PA {
-        // `allocate_page` zero-fills the returned page
+    fn alloc_frame() -> Frame {
         let buffer = uefi::allocate_page(uefi::sys::LoaderData);
-        PA::new(buffer.as_mut_ptr() as u64)
+        let pa = PA::new(buffer.as_mut_ptr() as u64);
+        Frame::new(pa)
     }
 }
 

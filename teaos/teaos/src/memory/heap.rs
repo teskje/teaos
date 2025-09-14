@@ -2,12 +2,12 @@ use core::alloc::{GlobalAlloc, Layout};
 use core::mem;
 use core::ptr::{self, NonNull};
 
-use aarch64::memory::VA;
-use aarch64::memory::paging::{MemoryClass, PAGE_SIZE};
+use aarch64::memory::Page;
+use aarch64::memory::paging::MemoryClass;
 use kstd::sync::Mutex;
 
-use crate::memory::alloc_frame;
 use crate::memory::paging::map_page;
+use crate::memory::phys::alloc_frame;
 use crate::memory::virt::{KHEAP_SIZE, KHEAP_START};
 
 #[global_allocator]
@@ -15,14 +15,14 @@ static HEAP_ALLOCATOR: LockedHeapAllocator = LockedHeapAllocator::new();
 
 struct HeapAllocator {
     freelist: FreeList,
-    heap_break: VA,
+    heap_break: Page,
 }
 
 impl HeapAllocator {
     const fn new() -> Self {
         Self {
             freelist: FreeList::new(),
-            heap_break: KHEAP_START,
+            heap_break: Page::new(KHEAP_START),
         }
     }
 
@@ -51,24 +51,24 @@ impl HeapAllocator {
 
     fn grow(&mut self, size: usize) -> Result<(), ()> {
         let size = round_up_page(size);
-        let new_break = self.heap_break + round_up_page(size);
+        let new_break = Page::new(self.heap_break.base() + size);
         let kheap_limit = KHEAP_START + KHEAP_SIZE;
 
-        if new_break >= kheap_limit {
+        if new_break.base() >= kheap_limit {
             return Err(());
         }
 
-        let mut va = self.heap_break;
-        while va < new_break {
-            let pa = alloc_frame();
-            map_page(va, pa, MemoryClass::Normal);
-            va += PAGE_SIZE;
+        let mut page = self.heap_break;
+        while page < new_break {
+            let frame = alloc_frame();
+            map_page(page, frame, MemoryClass::Normal);
+            page = page.next_page();
         }
 
-        let ptr = NonNull::new(self.heap_break.as_mut_ptr()).unwrap();
+        let ptr = NonNull::new(self.heap_break.as_mut_ptr().cast()).unwrap();
         self.freelist.insert(ptr, size);
 
-        self.heap_break = va;
+        self.heap_break = new_break;
 
         Ok(())
     }

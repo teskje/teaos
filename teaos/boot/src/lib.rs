@@ -15,7 +15,7 @@ mod paging;
 mod uefi;
 
 use aarch64::memory::paging::{MemoryClass, PAGE_SIZE, load_ttbr1};
-use aarch64::memory::{PA, VA};
+use aarch64::memory::{Frame, PA, Page, VA};
 use alloc::vec;
 use alloc::vec::Vec;
 use boot_info::{BootInfo, MemoryType};
@@ -114,10 +114,12 @@ fn load_kernel() -> Kernel {
 
         let pa = PA::new(buffer.as_ptr() as u64);
         let va = VA::new(phdr.virtual_address());
-        let size = buffer.len();
+        let frame = Frame::new(pa);
+        let page = Page::new(va);
+        let count = buffer.len() / PAGE_SIZE;
         let class = MemoryClass::Normal;
-        kernel_map.map_region(va, pa, size, class);
-        log!("  mapped {va:#} -> {pa:#} ({size:#x} bytes, {class:?})");
+        kernel_map.map_region(page, frame, count, class);
+        log!("  mapped {va:#} -> {pa:#} ({count} pages, {class:?})");
     }
 
     let mut phys_start = None;
@@ -152,23 +154,26 @@ fn create_phys_mapping(kernel_map: &mut PageMap, phys_start: VA, uart_base: PA) 
 
         let pa = block.start;
         let va = phys_start + pa.into_u64();
-        let pages = block.pages;
-        let size = pages * PAGE_SIZE;
+        let frame = Frame::new(pa);
+        let page = Page::new(va);
+        let count = block.pages;
         let class = match block.type_ {
             MemoryType::Unused | MemoryType::Boot | MemoryType::Acpi | MemoryType::Kernel => {
                 MemoryClass::Normal
             }
             MemoryType::Mmio => MemoryClass::Device,
         };
-        kernel_map.map_region(va, pa, size, class);
-        log!("  mapped {va:#} -> {pa:#} ({size:#x} bytes, {class:?})");
+        kernel_map.map_region(page, frame, count, class);
+        log!("  mapped {va:#} -> {pa:#} ({count} pages, {class:?})");
     }
 
     // The UEFI memory map doesn't include all device MMIO regions, so map the UART one explicitly.
+    let frame = Frame::new(uart_base);
     let va = phys_start + u64::from(uart_base);
+    let page = Page::new(va);
     let class = MemoryClass::Device;
-    kernel_map.map_page(va, uart_base, class);
-    log!("  mapped {va:#} -> {uart_base:#} ({PAGE_SIZE:#x} bytes, {class:?})");
+    kernel_map.map_page(page, frame, class);
+    log!("  mapped {va:#} -> {uart_base:#} (1 pages, {class:?})");
 }
 
 /// Find the ACPI RSDP in the UEFI config table.

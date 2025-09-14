@@ -2,14 +2,17 @@ use core::marker::PhantomData;
 use core::mem;
 
 use crate::instruction::{dsb_ish, dsb_ishst, isb, tlbi_vae1is, tlbi_vmalle1is};
-use crate::memory::{PA, VA};
 use crate::register::{MAIR_EL1, TCR_EL1, TTBR1_EL1};
+
+use super::{AddrMapper, Frame, FrameAlloc, PA, Page, VA};
 
 pub const PAGE_SIZE: usize = 4 << 10;
 
+const LAST_LEVEL: u64 = 3;
+
 /// Data structure for manipulating page tables.
 pub struct PageMap<Alloc, Mapper> {
-    root: PA,
+    root: Frame,
     mair_idx: MairIndexes,
     _frame_alloc: PhantomData<Alloc>,
     _addr_mapper: PhantomData<Mapper>,
@@ -21,13 +24,11 @@ where
     Mapper: AddrMapper,
 {
     pub fn new() -> Self {
-        let root = Alloc::alloc_frame();
+        let root = Self::alloc_page_table();
         Self::with_root(root)
     }
 
-    pub fn with_root(root: PA) -> Self {
-        assert!(root.is_aligned_to(PAGE_SIZE), "unaligned: {root:#}");
-
+    pub fn with_root(root: Frame) -> Self {
         Self {
             root,
             mair_idx: MairIndexes::read(),
@@ -36,149 +37,126 @@ where
         }
     }
 
-    unsafe fn table_at(&self, pa: PA) -> &Table {
-        assert!(pa.is_aligned_to(PAGE_SIZE), "unaligned: {pa:#}");
+    fn alloc_page_table() -> Frame {
+        let frame = Alloc::alloc_frame();
 
-        let va = Mapper::pa_to_va(pa);
-        unsafe { &*va.as_ptr() }
+        let page = Mapper::frame_to_page(frame);
+        unsafe { (*page.as_mut_ptr()).fill(0) };
+
+        frame
     }
 
-    unsafe fn table_at_mut(&mut self, pa: PA) -> &mut Table {
-        assert!(pa.is_aligned_to(PAGE_SIZE), "unaligned: {pa:#}");
-
-        let va = Mapper::pa_to_va(pa);
-        unsafe { &mut *va.as_mut_ptr() }
+    unsafe fn view_table(&self, frame: Frame) -> &Table {
+        let page = Mapper::frame_to_page(frame);
+        unsafe { &*page.as_ptr().cast() }
     }
 
-    pub fn map_page(&mut self, va: VA, pa: PA, class: MemoryClass) {
-        assert!(va.is_aligned_to(PAGE_SIZE), "unaligned: {va:#}");
-        assert!(pa.is_aligned_to(PAGE_SIZE), "unaligned: {pa:#}");
+    unsafe fn view_table_mut(&mut self, frame: Frame) -> &mut Table {
+        let page = Mapper::frame_to_page(frame);
+        unsafe { &mut *page.as_mut_ptr().cast() }
+    }
 
+    pub fn map_page(&mut self, page: Page, frame: Frame, class: MemoryClass) {
         let (attr_idx, share) = match class {
             MemoryClass::Normal => (self.mair_idx.normal, Shareability::Inner),
             MemoryClass::Device => (self.mair_idx.device, Shareability::Outer),
         };
 
-        let mut desc = Descriptor::new_page(pa);
+        let mut desc = Descriptor::new_page(frame);
         desc.set_attr_idx(attr_idx);
         desc.set_shareability(share);
 
-        self.insert(va, desc);
+        self.insert(page, desc);
     }
 
-    pub fn map_region(&mut self, mut va: VA, mut pa: PA, size: usize, class: MemoryClass) {
-        let end = va + size;
-        while va < end {
-            self.map_page(va, pa, class);
+    pub fn map_region(
+        &mut self,
+        start_page: Page,
+        start_frame: Frame,
+        pages: usize,
+        class: MemoryClass,
+    ) {
+        let mut page = start_page;
+        let mut frame = start_frame;
 
-            va += PAGE_SIZE;
-            pa += PAGE_SIZE;
+        for _ in 0..pages {
+            self.map_page(page, frame, class);
+            page = page.next_page();
+            frame = frame.next_frame();
         }
     }
 
-    fn insert(&mut self, va: VA, desc: Descriptor) {
-        assert!(va.is_aligned_to(PAGE_SIZE), "unaligned: {va:#}");
-
-        let slot = self.lookup(va);
+    fn insert(&mut self, page: Page, desc: Descriptor) {
+        let slot = self.lookup(page);
 
         // We require the existing descriptor to be invalid. Updating a valid entry requires a
         // "break-before-make" sequence, so the caller should unmap first.
-        assert_eq!(slot.type_(3), DescriptorType::Invalid);
+        assert!(!slot.valid());
 
         *slot = desc;
     }
 
-    fn lookup(&mut self, va: VA) -> &mut Descriptor {
-        assert!(va.is_aligned_to(PAGE_SIZE), "unaligned: {va:#}");
-
-        use DescriptorType::*;
-
-        let table_index = |va: VA, lvl: usize| {
+    fn lookup(&mut self, page: Page) -> &mut Descriptor {
+        let table_index = |lvl: u64| {
+            let va = page.base().into_u64() as usize;
             let shift = 39 - 9 * lvl;
-            (usize::from(va) >> shift) & 0x1ff
+            (va >> shift) & 0x1ff
         };
 
-        let mut table_base = self.root;
-        for level in 0..=2 {
-            let table = unsafe { self.table_at(table_base) };
-            let idx = table_index(va, level);
+        let mut table_frame = self.root;
+        for level in 0..LAST_LEVEL {
+            let table = unsafe { self.view_table(table_frame) };
+            let idx = table_index(level);
             let mut table_desc = table[idx];
 
-            match table_desc.type_(level) {
-                Invalid => {
-                    let pa = Alloc::alloc_frame();
-                    table_desc = Descriptor::new_table(pa);
-                    let table = unsafe { self.table_at_mut(table_base) };
-                    table[idx] = table_desc;
-                }
-                Table => {}
-                typ => panic!("unexpected {typ:?} descriptor on level {level} (va={va:?})"),
+            if !table_desc.valid() {
+                let frame = Self::alloc_page_table();
+                table_desc = Descriptor::new_table(frame);
+                let table = unsafe { self.view_table_mut(table_frame) };
+                table[idx] = table_desc;
             }
 
-            table_base = table_desc.address();
+            table_frame = table_desc.output_frame();
         }
 
-        let table = unsafe { self.table_at_mut(table_base) };
-        let idx = table_index(va, 3);
+        let table = unsafe { self.view_table_mut(table_frame) };
+        let idx = table_index(LAST_LEVEL);
         &mut table[idx]
     }
 
-    fn walk(&self, mut f: impl FnMut(VA, Descriptor, usize)) {
-        self.walk_inner(self.root, VA::new(0), 0, &mut f);
+    fn walk(&self, mut f: impl FnMut(Page, Descriptor)) {
+        self.walk_inner(self.root, Page::new(VA::new(0)), 0, &mut f);
     }
 
     fn walk_inner(
         &self,
-        table_base: PA,
-        mut va: VA,
-        level: usize,
-        f: &mut impl FnMut(VA, Descriptor, usize),
+        table_frame: Frame,
+        mut page: Page,
+        level: u64,
+        f: &mut impl FnMut(Page, Descriptor),
     ) {
-        use DescriptorType::*;
+        let va_step: u64 = 1 << (39 - 9 * level);
 
-        let va_step: usize = 1 << (39 - 9 * level);
-
-        let table = unsafe { self.table_at(table_base) };
+        let table = unsafe { self.view_table(table_frame) };
         for desc in table {
-            match desc.type_(level) {
-                Table => {
-                    f(va, *desc, level);
-
-                    let table_pa = desc.address();
-                    self.walk_inner(table_pa, va, level + 1, f);
+            if desc.valid() {
+                if level == LAST_LEVEL {
+                    f(page, *desc)
+                } else {
+                    let frame = desc.output_frame();
+                    self.walk_inner(frame, page, level + 1, f);
                 }
-                Page | Block => f(va, *desc, level),
-                Invalid => {}
             }
 
-            va += va_step;
+            page = Page::new(page.base() + va_step);
         }
     }
 
     pub fn clone_from(&mut self, other: &Self) {
-        other.walk(|va, desc, level| {
-            use DescriptorType::*;
-            match desc.type_(level) {
-                Page => self.insert(va, desc),
-                Block => unimplemented!(),
-                Invalid | Table => {}
-            }
+        other.walk(|page, desc| {
+            self.insert(page, desc);
         });
     }
-}
-
-/// Trait for page frame allocators.
-pub trait FrameAlloc {
-    /// Allocate a new page frame.
-    ///
-    /// The allocated frame must be zeroed and its address must be page-aligned.
-    fn alloc_frame() -> PA;
-}
-
-/// Trait for PA-to-VA address mappers.
-pub trait AddrMapper {
-    /// Map the given PA to a VA that can be used to access that physical memory location.
-    fn pa_to_va(pa: PA) -> VA;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -195,18 +173,14 @@ type Table = [Descriptor; TABLE_LEN];
 struct Descriptor(u64);
 
 impl Descriptor {
-    fn new_table(pa: PA) -> Self {
-        assert!(pa.is_aligned_to(PAGE_SIZE));
-        assert!(pa.into_u64() < (1 << 48));
-
-        Self(pa.into_u64() | 0b11)
+    fn new_table(frame: Frame) -> Self {
+        let addr = frame.base().into_u64();
+        Self(addr | 0b11)
     }
 
-    fn new_page(pa: PA) -> Self {
-        assert!(pa.is_aligned_to(PAGE_SIZE));
-        assert!(pa.into_u64() < (1 << 48));
-
-        let mut desc = Self(pa.into_u64() | 0b11);
+    fn new_page(frame: Frame) -> Self {
+        let addr = frame.base().into_u64();
+        let mut desc = Self(addr | 0b11);
 
         // Prevent the generation of Access flag faults.
         desc.set_access_flag();
@@ -214,8 +188,9 @@ impl Descriptor {
         desc
     }
 
-    fn address(&self) -> PA {
-        PA::new(self.0 & 0xfffffffff000)
+    fn output_frame(&self) -> Frame {
+        let addr = PA::new(self.0 & 0xfffffffff000);
+        Frame::new(addr)
     }
 
     fn set_access_flag(&mut self) {
@@ -238,22 +213,9 @@ impl Descriptor {
         self.0 |= (share as u64) << SHIFT;
     }
 
-    fn type_(&self, level: usize) -> DescriptorType {
-        match (self.0 & 0b11, level == 3) {
-            (0b10, false) => DescriptorType::Block,
-            (0b11, false) => DescriptorType::Table,
-            (0b11, true) => DescriptorType::Page,
-            _ => DescriptorType::Invalid,
-        }
+    fn valid(&self) -> bool {
+        self.0 & 0b11 == 0b11
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum DescriptorType {
-    Invalid,
-    Table,
-    Page,
-    Block,
 }
 
 struct MairIndexes {
@@ -315,7 +277,7 @@ pub unsafe fn load_ttbr1<A, M>(map: &PageMap<A, M>) {
     dsb_ishst();
 
     unsafe {
-        TTBR1_EL1::write(map.root);
+        TTBR1_EL1::write(map.root.base());
         TCR_EL1::write(tcr);
     }
 
@@ -354,7 +316,7 @@ pub unsafe fn disable_ttbr0() {
 }
 
 pub fn tlb_invalidate(mut va: VA, size: usize) {
-    assert!(va.is_aligned_to(PAGE_SIZE), "unaligned: {va:#}");
+    assert!(va.is_page_aligned(), "unaligned: {va:#}");
 
     let end = va + size;
 

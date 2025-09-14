@@ -6,13 +6,15 @@ mod phys;
 mod virt;
 
 use crate::log;
-use crate::memory::phys::{alloc_frame, free_frames};
 
+use aarch64::memory::Frame;
 use aarch64::memory::paging::disable_ttbr0;
 use boot_info::MemoryType;
 
-pub use self::virt::{KSTACK_END, pa_to_va};
+use self::phys::free_frames;
+
 pub use self::paging::map_page;
+pub use self::virt::{KSTACK_END, pa_to_va};
 
 /// Initialize the memory subsystem.
 ///
@@ -25,7 +27,8 @@ pub unsafe fn init(info: boot_info::Memory<'_>) {
     log!("  seeding frame allocator with unused blocks");
     for block in info.blocks {
         if block.type_ == MemoryType::Unused {
-            unsafe { free_frames(block.start, block.pages) };
+            let start = Frame::new(block.start);
+            unsafe { free_frames(start, block.pages) };
         }
     }
 
@@ -44,7 +47,8 @@ pub unsafe fn init(info: boot_info::Memory<'_>) {
     log!("  claiming boot memory for frame allocator");
     for block in memory_blocks {
         if block.type_ == MemoryType::Boot {
-            unsafe { free_frames(block.start, block.pages) };
+            let start = Frame::new(block.start);
+            unsafe { free_frames(start, block.pages) };
         }
     }
 }

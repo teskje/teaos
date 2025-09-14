@@ -2,7 +2,7 @@
 
 use core::mem;
 
-use aarch64::memory::PA;
+use aarch64::memory::{Frame, Page, PA};
 use aarch64::memory::paging::MemoryClass;
 use alloc::vec::Vec;
 
@@ -121,7 +121,10 @@ impl Discovery {
     fn probe_function(&mut self, cursor: &mut Cursor<'_>) -> bool {
         let pa = cursor.config_address();
         let va = pa_to_va(pa);
-        map_page(va, pa, MemoryClass::Device);
+
+        let frame = Frame::new(pa);
+        let page = Page::new(va);
+        map_page(page, frame, MemoryClass::Device);
 
         let fun = unsafe { Function::new(cursor.sbdf(), va.as_ptr()) };
 

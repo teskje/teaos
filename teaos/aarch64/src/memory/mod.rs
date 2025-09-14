@@ -1,212 +1,73 @@
 pub mod paging;
 
-use core::arch::asm;
-use core::fmt::{self, LowerHex};
-use core::ops::{Add, AddAssign};
+mod address;
 
-use crate::instruction::isb;
-use crate::register::PAR_EL1;
+use crate::memory::paging::PAGE_SIZE;
 
-/// Type for physical memory addresses.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[repr(transparent)]
-pub struct PA(u64);
+pub use self::address::{PA, VA};
 
-impl PA {
-    pub const fn new(x: u64) -> Self {
-        Self(x)
+/// A physical memory page frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Frame(PA);
+
+impl Frame {
+    pub const fn new(base: PA) -> Self {
+        assert!(base.is_page_aligned());
+
+        Self(base)
     }
 
-    pub const fn into_u64(self) -> u64 {
+    pub const fn base(self) -> PA {
         self.0
     }
 
-    pub fn is_aligned_to(&self, x: usize) -> bool {
-        usize::from(*self) % x == 0
-    }
-
-    pub fn as_mut_ptr<T>(&self) -> *mut T {
-        usize::from(*self) as *mut _
+    pub fn next_frame(self) -> Frame {
+        Self(self.0 + PAGE_SIZE)
     }
 }
 
-impl From<u64> for PA {
-    fn from(x: u64) -> Self {
-        Self(x)
-    }
-}
+/// A virtual memory page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Page(VA);
 
-impl From<usize> for PA {
-    fn from(x: usize) -> Self {
-        Self(x.try_into().unwrap())
-    }
-}
+impl Page {
+    pub const fn new(base: VA) -> Self {
+        assert!(base.is_page_aligned());
 
-impl From<PA> for u64 {
-    fn from(pa: PA) -> Self {
-        pa.0
-    }
-}
-
-impl From<PA> for usize {
-    fn from(pa: PA) -> Self {
-        pa.0.try_into().unwrap()
-    }
-}
-
-impl fmt::Debug for PA {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "PA({self:#})")
-    }
-}
-
-impl fmt::Display for PA {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        LowerHex::fmt(&self.0, f)
-    }
-}
-
-impl Add<u64> for PA {
-    type Output = Self;
-
-    fn add(self, rhs: u64) -> Self {
-        Self(self.0 + rhs)
-    }
-}
-
-impl Add<usize> for PA {
-    type Output = Self;
-
-    fn add(self, rhs: usize) -> Self {
-        Self(self.0 + u64::try_from(rhs).unwrap())
-    }
-}
-
-impl AddAssign<u64> for PA {
-    fn add_assign(&mut self, rhs: u64) {
-        *self = *self + rhs;
-    }
-}
-
-impl AddAssign<usize> for PA {
-    fn add_assign(&mut self, rhs: usize) {
-        *self = *self + rhs;
-    }
-}
-
-/// Type for virtual memory addresses.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[repr(transparent)]
-pub struct VA(u64);
-
-impl VA {
-    pub const fn new(x: u64) -> Self {
-        Self(x)
+        Self(base)
     }
 
-    pub const fn into_u64(self) -> u64 {
+    pub const fn base(self) -> VA {
         self.0
     }
 
-    pub fn is_aligned_to(&self, x: usize) -> bool {
-        usize::from(*self) % x == 0
+    pub fn next_page(self) -> Page {
+        Self(self.0 + PAGE_SIZE)
     }
 
-    pub fn as_ptr<T>(&self) -> *const T {
-        usize::from(*self) as *const _
+    pub const fn as_ptr(self) -> *const [u8; PAGE_SIZE] {
+        self.0.as_ptr()
     }
 
-    pub fn as_mut_ptr<T>(&self) -> *mut T {
-        usize::from(*self) as *mut _
-    }
-}
-
-impl From<u64> for VA {
-    fn from(x: u64) -> Self {
-        Self(x)
+    pub const fn as_mut_ptr(self) -> *mut [u8; PAGE_SIZE] {
+        self.0.as_mut_ptr()
     }
 }
 
-impl From<usize> for VA {
-    fn from(x: usize) -> Self {
-        Self(x.try_into().unwrap())
-    }
+/// Trait for page frame allocators.
+pub trait FrameAlloc {
+    /// Allocate a new page frame.
+    fn alloc_frame() -> Frame;
 }
 
-impl<T> From<&T> for VA {
-    fn from(x: &T) -> Self {
-        Self(x as *const _ as u64)
+/// Trait for PA-to-VA address mappers.
+pub trait AddrMapper {
+    /// Map the given PA to a VA that can be used to access that physical memory location.
+    fn pa_to_va(pa: PA) -> VA;
+
+    /// Map the given frame to a page.
+    fn frame_to_page(frame: Frame) -> Page {
+        let va = Self::pa_to_va(frame.base());
+        Page::new(va)
     }
-}
-
-impl From<VA> for u64 {
-    fn from(va: VA) -> Self {
-        va.0
-    }
-}
-
-impl From<VA> for usize {
-    fn from(va: VA) -> Self {
-        va.0.try_into().unwrap()
-    }
-}
-
-impl fmt::Debug for VA {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "VA({self:#})")
-    }
-}
-
-impl fmt::Display for VA {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        LowerHex::fmt(&self.0, f)
-    }
-}
-
-impl Add<u64> for VA {
-    type Output = Self;
-
-    fn add(self, rhs: u64) -> Self {
-        Self(self.0 + rhs)
-    }
-}
-
-impl Add<usize> for VA {
-    type Output = Self;
-
-    fn add(self, rhs: usize) -> Self {
-        Self(self.0 + u64::try_from(rhs).unwrap())
-    }
-}
-
-impl AddAssign<u64> for VA {
-    fn add_assign(&mut self, rhs: u64) {
-        *self = *self + rhs;
-    }
-}
-
-impl AddAssign<usize> for VA {
-    fn add_assign(&mut self, rhs: usize) {
-        *self = *self + rhs;
-    }
-}
-
-/// Translate the given virtual address to a physical address.
-pub fn va_to_pa(va: VA) -> PA {
-    let va = u64::from(va);
-    unsafe {
-        asm!("at s1e1r, {x}", x = in(reg) va);
-    }
-    isb();
-
-    let par = PAR_EL1::read();
-    if par.F() != 0 {
-        panic!(
-            "address translation failed\n\
-             PAR = {par:#?}"
-        );
-    }
-
-    let pa = (par.PA() << 12) | (va & 0xfff);
-    PA::new(pa)
 }
