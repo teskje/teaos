@@ -8,7 +8,7 @@ pub mod log;
 
 mod exception;
 mod memory;
-mod pci;
+// mod pci;
 mod uart;
 
 use core::arch::naked_asm;
@@ -44,10 +44,10 @@ pub unsafe extern "C" fn start(bootinfo: boot_info::ffi::BootInfo) -> ! {
 ///
 /// The provided `bootinfo` must contain correct memory addresses.
 unsafe extern "C" fn kernel_main(bootinfo: boot_info::ffi::BootInfo) -> ! {
-    let acpi_rsdp_ptr;
+    let acpi_rsdp_ptr: *const acpi::RSDP;
 
     // SAFETY: `bootinfo` references boot memory, which is valid until `memory::init` runs, which
-    //         invalidates it by reclaiming all boot memory.
+    // invalidates it by reclaiming all boot memory.
     unsafe {
         let bootinfo = BootInfo::from_ffi(bootinfo);
 
@@ -62,7 +62,7 @@ unsafe extern "C" fn kernel_main(bootinfo: boot_info::ffi::BootInfo) -> ! {
         memory::init(bootinfo.memory);
     }
 
-    unsafe { pci::discover(acpi_rsdp_ptr) };
+    // unsafe { pci::discover(acpi_rsdp_ptr) };
 
     log!("made it to the end!");
     aarch64::halt();

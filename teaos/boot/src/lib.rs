@@ -43,7 +43,7 @@ pub fn load() -> ! {
     log!("loading kernel binary");
     let mut kernel = load_kernel();
     log!("  kernel.entry={:#?}", kernel.entry);
-    log!("  kernel.phys_start={:?}", kernel.phys_start);
+    log!("  kernel.physmap_start={:?}", kernel.physmap_start);
 
     log!("retrieving ACPI RSDP pointer");
     let rsdp = find_acpi_rsdp();
@@ -55,7 +55,7 @@ pub fn load() -> ! {
 
     log!("creating phys mapping");
     let uart_base = uart_info.base();
-    create_phys_mapping(&mut kernel.pager, kernel.phys_start, uart_base);
+    create_physmap(&mut kernel.pager, kernel.physmap_start, uart_base);
 
     log!("exiting boot services");
     let memory_info = exit_boot_services();
@@ -78,7 +78,7 @@ pub fn load() -> ! {
 struct Kernel {
     entry: fn(boot_info::ffi::BootInfo) -> !,
     pager: KernelPager,
-    phys_start: VA,
+    physmap_start: VA,
 }
 
 /// Memory type used by the loader for pages containing kernel code or data.
@@ -118,26 +118,27 @@ fn load_kernel() -> Kernel {
         log!("  mapped {va:#} -> {pa:#} ({count} pages)");
     }
 
-    let mut phys_start = None;
+    let mut physmap_start = None;
     if let Some(strtab) = elf.symbol_strtab() {
         for sym in elf.symbols().unwrap() {
-            if sym.name(&strtab) == c"phys_start" {
-                phys_start = Some(VA::new(sym.value()));
+            if sym.name(&strtab) == c"physmap_start" {
+                physmap_start = Some(VA::new(sym.value()));
                 break;
             }
         }
     }
 
-    let phys_start = phys_start.expect("missing `phys_start` kernel symbol");
+    let physmap_start =
+        physmap_start.unwrap_or_else(|| panic!("missing `physmap_start` kernel symbol"));
 
     Kernel {
         entry,
         pager,
-        phys_start,
+        physmap_start,
     }
 }
 
-fn create_phys_mapping(pager: &mut KernelPager, phys_start: VA, uart_base: PA) {
+fn create_physmap(pager: &mut KernelPager, physmap_start: VA, uart_base: PA) {
     let (buffer_size, _) = uefi::get_memory_map_size();
     // Allocating this `Vec` may add an entry to the memory map, so we need to overprovision.
     let buffer = vec![0; buffer_size + 1024];
@@ -149,14 +150,14 @@ fn create_phys_mapping(pager: &mut KernelPager, phys_start: VA, uart_base: PA) {
         };
 
         let pa = block.start;
-        let va = phys_start + pa.into_u64();
+        let va = physmap_start + pa.into_u64();
         let count = block.pages;
         let type_ = block.type_;
         pager.map_region(va, pa, count, type_);
     }
 
     // The UEFI memory map doesn't include all device MMIO regions, so map the UART one explicitly.
-    let va = phys_start + u64::from(uart_base);
+    let va = physmap_start + u64::from(uart_base);
     let type_ = MemoryType::Mmio;
     pager.map_region(va, uart_base, 1, type_);
 }
