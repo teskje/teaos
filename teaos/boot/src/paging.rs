@@ -1,9 +1,8 @@
 use core::mem;
 
-use aarch64::memory::paging::{MairIndexes, Shareability, load_ttbr1};
+use aarch64::memory::paging::{Flags, MairIndexes, Shareability, load_ttbr1};
 use aarch64::memory::{PA, PAGE_MAP_LEVELS, PAGE_SIZE, VA};
 use aarch64::register::TCR_EL1;
-use boot_info::MemoryType;
 
 use crate::uefi;
 
@@ -21,24 +20,32 @@ impl KernelPager {
         }
     }
 
-    pub fn map_region(&mut self, start_va: VA, start_pa: PA, pages: usize, type_: MemoryType) {
-        let (attr_idx, share) = if type_ == MemoryType::Mmio {
-            (self.mair_idx.device, Shareability::Outer)
-        } else {
-            (self.mair_idx.normal, Shareability::Inner)
-        };
+    fn map_region(&mut self, start_va: VA, start_pa: PA, pages: usize, flags: Flags) {
+        let flags = flags.unprivileged_execute_never(true).access_flag(true);
 
         let mut va = start_va;
         let mut pa = start_pa;
         for _ in 0..pages {
-            let mut desc = Descriptor::new_page(pa);
-            desc.set_attr_idx(attr_idx);
-            desc.set_shareability(share);
+            let desc = Descriptor::new_page(pa, flags);
             self.insert(va, desc);
 
             va += PAGE_SIZE;
             pa += PAGE_SIZE;
         }
+    }
+
+    pub fn map_ram_region(&mut self, start_va: VA, start_pa: PA, pages: usize, flags: Flags) {
+        let flags = flags
+            .attr_idx(self.mair_idx.normal)
+            .shareability(Shareability::Inner);
+        self.map_region(start_va, start_pa, pages, flags);
+    }
+
+    pub fn map_mmio_region(&mut self, start_va: VA, start_pa: PA, pages: usize, flags: Flags) {
+        let flags = flags
+            .attr_idx(self.mair_idx.device)
+            .shareability(Shareability::Outer);
+        self.map_region(start_va, start_pa, pages, flags);
     }
 
     fn insert(&mut self, va: VA, desc: Descriptor) {
@@ -80,37 +87,12 @@ impl Descriptor {
         Self(base.into_u64() | 0b11)
     }
 
-    fn new_page(base: PA) -> Self {
-        let mut desc = Self(base.into_u64() | 0b11);
-
-        // Prevent the generation of Access flag faults.
-        desc.set_access_flag();
-
-        desc
+    fn new_page(base: PA, flags: Flags) -> Self {
+        Self(u64::from(base) | u64::from(flags) | 0b11)
     }
 
     fn valid(&self) -> bool {
         self.0 & 0b11 == 0b11
-    }
-
-    fn set_access_flag(&mut self) {
-        self.0 |= 1 << 10;
-    }
-
-    fn set_attr_idx(&mut self, attr_idx: u8) {
-        const MASK: u64 = 0b111;
-        const SHIFT: u64 = 2;
-
-        self.0 &= !(MASK << SHIFT);
-        self.0 |= u64::from(attr_idx) << SHIFT;
-    }
-
-    fn set_shareability(&mut self, share: Shareability) {
-        const MASK: u64 = 0b11;
-        const SHIFT: u64 = 8;
-
-        self.0 &= !(MASK << SHIFT);
-        self.0 |= (share as u64) << SHIFT;
     }
 
     fn next_table(&self) -> *mut Table {

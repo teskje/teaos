@@ -5,7 +5,6 @@ use core::ptr::{self, NonNull};
 use aarch64::memory::VA;
 use kstd::sync::Mutex;
 
-use crate::memory::phys;
 use crate::memory::virt::{self, KHEAP_SIZE, KHEAP_START, PageNr};
 
 #[global_allocator]
@@ -57,8 +56,7 @@ impl HeapAllocator {
 
         let mut vpn = PageNr::from_va(self.heap_break);
         while vpn.va() < new_break {
-            let frame = phys::alloc();
-            virt::map_ram(vpn, frame);
+            virt::map_data_page(vpn);
             vpn += 1;
         }
 

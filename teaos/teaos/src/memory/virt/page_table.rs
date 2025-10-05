@@ -4,7 +4,7 @@ use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::ops::{Deref, DerefMut};
 
-use aarch64::memory::paging::Shareability;
+use aarch64::memory::paging::Flags;
 use aarch64::memory::{PA, PAGE_SIZE};
 
 use crate::memory::phys::FrameNr;
@@ -237,8 +237,8 @@ impl<const L: u64> PageTableIndex<L> for PageNr {
 pub(super) struct PageDesc(u64);
 
 impl PageDesc {
-    pub fn new(base: PA) -> Self {
-        Self(base.into_u64() | 0b11)
+    pub fn new(base: PA, flags: Flags) -> Self {
+        Self(u64::from(base) | u64::from(flags) | 0b11)
     }
 
     fn valid(&self) -> bool {
@@ -247,26 +247,6 @@ impl PageDesc {
 
     pub fn output_addr(&self) -> PA {
         PA::new(self.0 & 0xfffffffff000)
-    }
-
-    pub fn set_access_flag(&mut self) {
-        self.0 |= 1 << 10;
-    }
-
-    pub fn set_attr_idx(&mut self, attr_idx: u8) {
-        const MASK: u64 = 0b111;
-        const SHIFT: u64 = 2;
-
-        self.0 &= !(MASK << SHIFT);
-        self.0 |= u64::from(attr_idx) << SHIFT;
-    }
-
-    pub fn set_shareability(&mut self, share: Shareability) {
-        const MASK: u64 = 0b11;
-        const SHIFT: u64 = 8;
-
-        self.0 &= !(MASK << SHIFT);
-        self.0 |= (share as u64) << SHIFT;
     }
 }
 

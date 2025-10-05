@@ -7,11 +7,11 @@ mod page_table;
 use core::ops::{Add, AddAssign};
 
 use aarch64::instruction::{dsb_ishst, isb};
-use aarch64::memory::paging::load_ttbr1;
+use aarch64::memory::paging::{Flags, load_ttbr1};
 use aarch64::memory::{PA, PAGE_SHIFT, VA};
 use kstd::sync::Mutex;
 
-use crate::memory::phys::FrameRef;
+use crate::memory::phys;
 
 use self::layout::PHYSMAP_START;
 use self::page_map::KernelPageMap;
@@ -54,8 +54,10 @@ struct VirtMemoryManager {
 }
 
 impl VirtMemoryManager {
-    fn map_ram(&mut self, vpn: PageNr, frame: FrameRef) {
-        self.kernel_map.map_ram(vpn, frame);
+    fn map_data_page(&mut self, vpn: PageNr) {
+        let frame = phys::alloc();
+        let flags = Flags::default().privileged_execute_never(true);
+        self.kernel_map.map_ram_page(vpn, frame, flags);
 
         // Wait for the new mapping to become visible.
         // Note that we don't need to TLBI here, since there wasn't a valid mapping for the VA before
@@ -88,7 +90,7 @@ pub(super) unsafe fn init() {
     *vmm = Some(VirtMemoryManager { kernel_map });
 }
 
-pub fn map_ram(vpn: PageNr, frame: FrameRef) {
+pub fn map_data_page(vpn: PageNr) {
     let mut vmm = VMM.lock();
-    vmm.as_mut().expect("vmm initialized").map_ram(vpn, frame);
+    vmm.as_mut().expect("vmm initialized").map_data_page(vpn);
 }

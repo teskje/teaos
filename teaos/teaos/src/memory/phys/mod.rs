@@ -9,8 +9,6 @@ use core::sync::atomic::{self, AtomicU32, Ordering};
 use aarch64::memory::{PA, PAGE_SHIFT, PAGE_SIZE};
 use kstd::sync::Mutex;
 
-use crate::log;
-
 use self::alloc::{alloc_frame, free_frame};
 use super::pa_to_va;
 

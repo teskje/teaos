@@ -1,4 +1,4 @@
-use aarch64::memory::paging::{MairIndexes, Shareability};
+use aarch64::memory::paging::{AccessPermissions, Flags, MairIndexes, Shareability};
 use aarch64::memory::{PA, VA};
 use aarch64::register::TTBR1_EL1;
 
@@ -25,16 +25,20 @@ impl PageMap {
         self.level0.base()
     }
 
-    pub fn map_ram(&mut self, vpn: PageNr, frame: FrameRef) {
-        let mut desc = PageDesc::new(frame.pa());
-
-        desc.set_access_flag();
-        desc.set_attr_idx(self.mair_idx.normal);
-        desc.set_shareability(Shareability::Inner);
+    pub fn map_page(&mut self, vpn: PageNr, frame: FrameRef, flags: Flags) {
+        let flags = flags.access_flag(true);
+        let desc = PageDesc::new(frame.pa(), flags);
 
         frame.inc_map();
         // SAFETY: `inc_map` called above.
         unsafe { self.insert(vpn, desc) }
+    }
+
+    pub fn map_ram_page(&mut self, vpn: PageNr, frame: FrameRef, flags: Flags) {
+        let flags = flags
+            .attr_idx(self.mair_idx.normal)
+            .shareability(Shareability::Inner);
+        self.map_page(vpn, frame, flags);
     }
 
     /// # Safety
@@ -100,8 +104,11 @@ impl KernelPageMap {
         Self(map)
     }
 
-    pub fn map_ram(&mut self, vpn: PageNr, frame: FrameRef) {
-        self.0.map_ram(vpn, frame);
+    pub fn map_ram_page(&mut self, vpn: PageNr, frame: FrameRef, flags: Flags) {
+        let flags = flags
+            .access_permissions(AccessPermissions::PrivRW)
+            .unprivileged_execute_never(true);
+        self.0.map_ram_page(vpn, frame, flags);
     }
 }
 

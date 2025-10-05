@@ -3,6 +3,74 @@ use crate::register::{MAIR_EL1, TCR_EL1, TTBR1_EL1};
 
 use super::{PA, PAGE_SIZE, VA};
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Flags(u64);
+
+impl Flags {
+    pub fn attr_idx(self, x: u8) -> Self {
+        self.set(x, 2, 0b111)
+    }
+
+    pub fn access_permissions(self, x: AccessPermissions) -> Self {
+        self.set(x, 6, 0b11)
+    }
+
+    pub fn shareability(self, x: Shareability) -> Self {
+        self.set(x, 8, 0b11)
+    }
+
+    pub fn access_flag(self, x: bool) -> Self {
+        self.set(x, 10, 0b1)
+    }
+
+    pub fn privileged_execute_never(self, x: bool) -> Self {
+        self.set(x, 53, 0b1)
+    }
+
+    pub fn unprivileged_execute_never(self, x: bool) -> Self {
+        self.set(x, 54, 0b1)
+    }
+
+    fn set<X: Into<u64>>(mut self, x: X, shift: u64, mask: u64) -> Self {
+        self.0 &= !(mask << shift);
+        self.0 |= x.into() << shift;
+        self
+    }
+}
+
+impl From<Flags> for u64 {
+    fn from(flags: Flags) -> Self {
+        flags.0
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum AccessPermissions {
+    PrivRW = 0b00,
+    UnprivRW = 0b01,
+    PrivRO = 0b10,
+    UnprivRO = 0b11,
+}
+
+impl From<AccessPermissions> for u64 {
+    fn from(value: AccessPermissions) -> Self {
+        value as u64
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Shareability {
+    None = 0b00,
+    Inner = 0b11,
+    Outer = 0b10,
+}
+
+impl From<Shareability> for u64 {
+    fn from(value: Shareability) -> Self {
+        value as u64
+    }
+}
+
 pub struct MairIndexes {
     pub device: u8,
     pub normal: u8,
@@ -36,13 +104,6 @@ impl MairIndexes {
             normal: normal.expect("missing normal attr"),
         }
     }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum Shareability {
-    None = 0b00,
-    Inner = 0b11,
-    Outer = 0b10,
 }
 
 /// Load a page map into TTBR1.

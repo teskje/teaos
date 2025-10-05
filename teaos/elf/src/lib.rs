@@ -179,6 +179,14 @@ impl Phdr {
         self.type_ == PT_LOAD
     }
 
+    pub fn is_executable(&self) -> bool {
+        self.flags & PF_X != 0
+    }
+
+    pub fn is_writable(&self) -> bool {
+        self.flags & PF_W != 0
+    }
+
     pub fn virtual_address(&self) -> u64 {
         self.vaddr
     }
@@ -189,6 +197,9 @@ impl Phdr {
 }
 
 const PT_LOAD: u32 = 1;
+
+const PF_X: u32 = 0b01;
+const PF_W: u32 = 0b10;
 
 #[derive(Clone, Debug)]
 #[repr(C)]

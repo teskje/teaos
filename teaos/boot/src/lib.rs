@@ -14,6 +14,7 @@ mod allocator;
 mod paging;
 mod uefi;
 
+use aarch64::memory::paging::{AccessPermissions, Flags};
 use aarch64::memory::{PA, PAGE_SIZE, VA};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -110,11 +111,20 @@ fn load_kernel() -> Kernel {
         let buffer = uefi::allocate_page_memory(size, KERNEL_MEMORY);
         elf.read_segment(&phdr, buffer);
 
+        let ap = if phdr.is_writable() {
+            AccessPermissions::PrivRW
+        } else {
+            AccessPermissions::PrivRO
+        };
+        let xn = !phdr.is_executable();
+        let flags = Flags::default()
+            .access_permissions(ap)
+            .privileged_execute_never(xn);
+
         let pa = PA::new(buffer.as_ptr() as u64);
         let va = VA::new(phdr.virtual_address());
         let count = buffer.len() / PAGE_SIZE;
-        let type_ = MemoryType::Kernel;
-        pager.map_region(va, pa, count, type_);
+        pager.map_ram_region(va, pa, count, flags);
         log!("  mapped {va:#} -> {pa:#} ({count} pages)");
     }
 
@@ -139,27 +149,32 @@ fn load_kernel() -> Kernel {
 }
 
 fn create_physmap(pager: &mut KernelPager, physmap_start: VA, uart_base: PA) {
+    let mut map = |pa: PA, pages, type_| {
+        let va = physmap_start + pa.into_u64();
+        let flags = Flags::default()
+            .access_permissions(AccessPermissions::PrivRW)
+            .privileged_execute_never(true);
+
+        if type_ == MemoryType::Mmio {
+            pager.map_mmio_region(va, pa, pages, flags);
+        } else {
+            pager.map_ram_region(va, pa, pages, flags);
+        }
+    };
+
     let (buffer_size, _) = uefi::get_memory_map_size();
     // Allocating this `Vec` may add an entry to the memory map, so we need to overprovision.
     let buffer = vec![0; buffer_size + 1024];
     let memory_map = uefi::get_memory_map(buffer);
 
     for desc in memory_map.iter() {
-        let Some(block) = memory_bootinfo_from_uefi(desc) else {
-            continue;
+        if let Some(block) = memory_bootinfo_from_uefi(desc) {
+            map(block.start, block.pages, block.type_);
         };
-
-        let pa = block.start;
-        let va = physmap_start + pa.into_u64();
-        let count = block.pages;
-        let type_ = block.type_;
-        pager.map_region(va, pa, count, type_);
     }
 
     // The UEFI memory map doesn't include all device MMIO regions, so map the UART one explicitly.
-    let va = physmap_start + u64::from(uart_base);
-    let type_ = MemoryType::Mmio;
-    pager.map_region(va, uart_base, 1, type_);
+    map(uart_base, 1, MemoryType::Mmio);
 }
 
 /// Find the ACPI RSDP in the UEFI config table.
