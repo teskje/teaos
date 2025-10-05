@@ -3,6 +3,17 @@ use core::arch::asm;
 use crate::memory::VA;
 
 #[inline(always)]
+pub fn at_s1e1r(va: VA) {
+    unsafe {
+        asm!(
+            "at s1e1r, {x}",
+            x = in(reg) va.into_u64(),
+            options(preserves_flags, nostack),
+        );
+    }
+}
+
+#[inline(always)]
 pub fn dsb_ish() {
     unsafe {
         asm!("dsb ish", options(preserves_flags, nostack));

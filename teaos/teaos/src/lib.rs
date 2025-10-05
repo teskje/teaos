@@ -8,7 +8,7 @@ pub mod log;
 
 mod exception;
 mod memory;
-// mod pci;
+mod pci;
 mod uart;
 
 use core::arch::naked_asm;
@@ -62,7 +62,7 @@ unsafe extern "C" fn kernel_main(bootinfo: boot_info::ffi::BootInfo) -> ! {
         memory::init(bootinfo.memory);
     }
 
-    // unsafe { pci::discover(acpi_rsdp_ptr) };
+    unsafe { pci::discover(acpi_rsdp_ptr) };
 
     log!("made it to the end!");
     aarch64::halt();

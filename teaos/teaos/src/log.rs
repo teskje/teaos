@@ -2,7 +2,7 @@
 
 use core::fmt::{self, Write};
 
-use crate::memory::pa_to_va;
+use crate::memory::mmio;
 use crate::uart::Uart;
 
 static mut LOGGER: Logger = Logger::new();
@@ -33,15 +33,10 @@ impl Write for Logger {
 ///
 /// The given UART configuration must be correct.
 pub unsafe fn init(uart_info: boot_info::Uart) {
+    let mmio = unsafe { mmio::claim_page(uart_info.base()) };
     let uart = match uart_info {
-        boot_info::Uart::Pl011 { base } => {
-            let base = pa_to_va(base);
-            unsafe { Uart::pl011(base.as_mut_ptr()) }
-        }
-        boot_info::Uart::Uart16550 { base } => {
-            let base = pa_to_va(base);
-            unsafe { Uart::uart16550(base.as_mut_ptr()) }
-        }
+        boot_info::Uart::Pl011 { .. } => unsafe { Uart::pl011(mmio) },
+        boot_info::Uart::Uart16550 { .. } => unsafe { Uart::uart16550(mmio) },
     };
 
     unsafe {

@@ -2,11 +2,10 @@
 
 use core::mem;
 
-use aarch64::memory::{Frame, Page, PA};
-use aarch64::memory::paging::MemoryClass;
+use aarch64::memory::PA;
 use alloc::vec::Vec;
 
-use crate::memory::{map_page, pa_to_va};
+use crate::memory::{mmio, pa_to_va};
 use crate::pci::{Function, Sbdf};
 
 pub(super) struct Discovery {
@@ -120,13 +119,10 @@ impl Discovery {
 
     fn probe_function(&mut self, cursor: &mut Cursor<'_>) -> bool {
         let pa = cursor.config_address();
-        let va = pa_to_va(pa);
-
-        let frame = Frame::new(pa);
-        let page = Page::new(va);
-        map_page(page, frame, MemoryClass::Device);
-
-        let fun = unsafe { Function::new(cursor.sbdf(), va.as_ptr()) };
+        let fun = unsafe {
+            let config_space = mmio::claim_page(pa);
+            Function::new(cursor.sbdf(), config_space)
+        };
 
         if fun.vendor_id() == 0xffff {
             return false;

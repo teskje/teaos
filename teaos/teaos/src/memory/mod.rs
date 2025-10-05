@@ -1,5 +1,7 @@
 //! Memory management support.
 
+pub mod mmio;
+
 mod heap;
 mod phys;
 mod virt;
@@ -35,7 +37,7 @@ pub unsafe fn init(info: boot_info::Memory<'_>) {
     log!("  initializing VMM");
     // SAFETY: No references to TTBR1 page tables exist.
     unsafe { virt::init() };
-    
+
     // Taking over the boot memory will make the bootinfo invalid, so copy what we still need and
     // then drop it.
     let memory_blocks = info.blocks.to_vec();

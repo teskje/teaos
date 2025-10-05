@@ -1,29 +1,32 @@
-mod id;
 mod discover;
+mod id;
 
 use alloc::vec::Vec;
-use core::fmt;
+use core::{fmt, mem};
 
 use crate::log;
+use crate::memory::mmio::MmioPage;
 use crate::pci::discover::Discovery;
 
 #[derive(Debug)]
 pub struct Function {
     sbdf: Sbdf,
-    config_space: *const u32,
+    config_space: MmioPage,
 }
 
 impl Function {
     /// # Safety
     ///
-    /// `config_space` must be a valid pointer to a PCIe config space.
-    unsafe fn new(sbdf: Sbdf, config_space: *const u32) -> Self {
+    /// `config_space` must point to a valid PCIe config space.
+    unsafe fn new(sbdf: Sbdf, config_space: MmioPage) -> Self {
         Self { sbdf, config_space }
     }
 
     fn read_config_word(&self, idx: usize) -> u32 {
         assert!(idx < 1024);
-        unsafe { self.config_space.add(idx).read_volatile() }
+
+        let offset = idx * mem::size_of::<u32>();
+        unsafe { self.config_space.read(offset) }
     }
 
     fn vendor_id(&self) -> u16 {
@@ -48,11 +51,6 @@ impl Function {
     fn class(&self) -> u8 {
         let w = self.read_config_word(2);
         (w >> 24) as u8
-    }
-
-    fn header_type(&self) -> u8 {
-        let w = self.read_config_word(3);
-        ((w >> 16) & 0x7f) as u8
     }
 
     fn multi_function(&self) -> bool {

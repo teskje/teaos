@@ -25,20 +25,16 @@ impl PageMap {
         self.level0.base()
     }
 
-    pub fn map_page(&mut self, vpn: PageNr, frame: FrameRef, flags: Flags) {
-        let flags = flags.access_flag(true);
+    pub fn map_ram_page(&mut self, vpn: PageNr, frame: FrameRef, flags: Flags) {
+        let flags = flags
+            .access_flag(true)
+            .attr_idx(self.mair_idx.normal)
+            .shareability(Shareability::Inner);
         let desc = PageDesc::new(frame.pa(), flags);
 
         frame.inc_map();
         // SAFETY: `inc_map` called above.
         unsafe { self.insert(vpn, desc) }
-    }
-
-    pub fn map_ram_page(&mut self, vpn: PageNr, frame: FrameRef, flags: Flags) {
-        let flags = flags
-            .attr_idx(self.mair_idx.normal)
-            .shareability(Shareability::Inner);
-        self.map_page(vpn, frame, flags);
     }
 
     /// # Safety
@@ -109,6 +105,19 @@ impl KernelPageMap {
             .access_permissions(AccessPermissions::PrivRW)
             .unprivileged_execute_never(true);
         self.0.map_ram_page(vpn, frame, flags);
+    }
+
+    pub fn map_mmio_page(&mut self, vpn: PageNr, pfn: FrameNr, flags: Flags) {
+        let flags = flags
+            .access_flag(true)
+            .attr_idx(self.0.mair_idx.device)
+            .shareability(Shareability::Outer)
+            .access_permissions(AccessPermissions::PrivRW)
+            .unprivileged_execute_never(true);
+        let desc = PageDesc::new(pfn.pa(), flags);
+
+        // SAFETY: Page is never unmapped again.
+        unsafe { self.0.insert(vpn, desc) }
     }
 }
 

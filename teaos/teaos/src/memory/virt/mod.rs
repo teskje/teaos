@@ -11,7 +11,7 @@ use aarch64::memory::paging::{Flags, load_ttbr1};
 use aarch64::memory::{PA, PAGE_SHIFT, VA};
 use kstd::sync::Mutex;
 
-use crate::memory::phys;
+use crate::memory::phys::{self, FrameNr, FrameRef};
 
 use self::layout::PHYSMAP_START;
 use self::page_map::KernelPageMap;
@@ -54,10 +54,20 @@ struct VirtMemoryManager {
 }
 
 impl VirtMemoryManager {
-    fn map_data_page(&mut self, vpn: PageNr) {
-        let frame = phys::alloc();
+    fn map_data_page(&mut self, vpn: PageNr, frame: FrameRef) {
         let flags = Flags::default().privileged_execute_never(true);
         self.kernel_map.map_ram_page(vpn, frame, flags);
+
+        // Wait for the new mapping to become visible.
+        // Note that we don't need to TLBI here, since there wasn't a valid mapping for the VA before
+        // (`PageMap::map_page` checks that).
+        dsb_ishst();
+        isb();
+    }
+
+    fn map_mmio_page(&mut self, vpn: PageNr, pfn: FrameNr) {
+        let flags = Flags::default().privileged_execute_never(true);
+        self.kernel_map.map_mmio_page(vpn, pfn, flags);
 
         // Wait for the new mapping to become visible.
         // Note that we don't need to TLBI here, since there wasn't a valid mapping for the VA before
@@ -91,6 +101,20 @@ pub(super) unsafe fn init() {
 }
 
 pub fn map_data_page(vpn: PageNr) {
+    let frame = phys::alloc();
+
     let mut vmm = VMM.lock();
-    vmm.as_mut().expect("vmm initialized").map_data_page(vpn);
+    vmm.as_mut()
+        .expect("vmm initialized")
+        .map_data_page(vpn, frame);
+}
+
+pub fn map_mmio_page(pfn: FrameNr) {
+    let va = pa_to_va(pfn.pa());
+    let vpn = PageNr::from_va(va);
+
+    let mut vmm = VMM.lock();
+    vmm.as_mut()
+        .expect("vmm initialized")
+        .map_mmio_page(vpn, pfn);
 }

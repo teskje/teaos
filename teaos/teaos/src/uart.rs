@@ -1,7 +1,8 @@
 //! Simple drivers for supported UART devices.
 
-use core::ffi::c_void;
-use core::fmt;
+use core::{fmt, hint};
+
+use crate::memory::mmio::MmioPage;
 
 #[derive(Debug)]
 pub enum Uart {
@@ -10,12 +11,12 @@ pub enum Uart {
 }
 
 impl Uart {
-    pub unsafe fn pl011(base: *mut c_void) -> Self {
-        Self::Pl011(Pl011 { base })
+    pub unsafe fn pl011(mmio: MmioPage) -> Self {
+        Self::Pl011(Pl011 { mmio })
     }
 
-    pub unsafe fn uart16550(base: *mut c_void) -> Self {
-        Self::Uart16550(Uart16550 { base })
+    pub unsafe fn uart16550(mmio: MmioPage) -> Self {
+        Self::Uart16550(Uart16550 { mmio })
     }
 }
 
@@ -30,23 +31,21 @@ impl fmt::Write for Uart {
 
 #[derive(Debug)]
 pub struct Pl011 {
-    base: *mut c_void,
+    mmio: MmioPage,
 }
 
 impl Pl011 {
     fn write_dr(&mut self, val: u8) {
-        unsafe {
-            let dr: *mut u8 = self.base.add(0x000).cast();
-            dr.write_volatile(val);
-        }
+        unsafe { self.mmio.write(0x000, val) }
+    }
+
+    fn read_fr(&self) -> u16 {
+        unsafe { self.mmio.read(0x018) }
     }
 
     fn busy(&self) -> bool {
-        unsafe {
-            let fr: *mut u16 = self.base.add(0x018).cast();
-            let flags = fr.read_volatile();
-            flags & (1 << 3) != 0
-        }
+        let flags = self.read_fr();
+        flags & (1 << 3) != 0
     }
 }
 
@@ -54,7 +53,9 @@ impl fmt::Write for Pl011 {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for b in s.bytes() {
             self.write_dr(b);
-            while self.busy() {}
+            while self.busy() {
+                hint::spin_loop();
+            }
         }
         Ok(())
     }
@@ -62,23 +63,21 @@ impl fmt::Write for Pl011 {
 
 #[derive(Debug)]
 pub struct Uart16550 {
-    base: *mut c_void,
+    mmio: MmioPage,
 }
 
 impl Uart16550 {
     fn write_thr(&mut self, val: u8) {
-        unsafe {
-            let thr: *mut u8 = self.base.add(0b000).cast();
-            thr.write_volatile(val);
-        }
+        unsafe { self.mmio.write(0b000, val) }
+    }
+
+    fn read_lsr(&self) -> u8 {
+        unsafe { self.mmio.read(0b101) }
     }
 
     fn thr_empty(&self) -> bool {
-        unsafe {
-            let lsr: *mut u8 = self.base.add(0b101).cast();
-            let flags = lsr.read_volatile();
-            flags & (1 << 5) != 0
-        }
+        let flags = self.read_lsr();
+        flags & (1 << 5) != 0
     }
 }
 
@@ -86,7 +85,9 @@ impl fmt::Write for Uart16550 {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for b in s.bytes() {
             self.write_thr(b);
-            while !self.thr_empty() {}
+            while !self.thr_empty() {
+                hint::spin_loop();
+            }
         }
         Ok(())
     }
