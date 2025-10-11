@@ -16,7 +16,7 @@ static PMM: Mutex<PhysMemoryManager> = Mutex::new(PhysMemoryManager::new());
 
 /// A physical page frame number.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) struct FrameNr(u64);
+pub struct FrameNr(u64);
 
 impl FrameNr {
     pub fn from_pa(pa: PA) -> Self {
@@ -262,12 +262,12 @@ impl FrameMap {
 }
 
 /// Allocate a page frame.
-pub(super) fn alloc() -> FrameRef {
+pub fn alloc() -> FrameRef {
     PMM.lock().alloc()
 }
 
 /// Allocate a page frame filled with zeroes.
-pub(super) fn alloc_zero() -> FrameRef {
+pub fn alloc_zero() -> FrameRef {
     let mut frame = alloc();
     frame.with_contents(|buf| buf.fill(0));
     frame

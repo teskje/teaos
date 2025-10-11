@@ -17,6 +17,7 @@ use self::layout::PHYSMAP_START;
 use self::page_map::KernelPageMap;
 
 pub use self::layout::*;
+pub use self::page_map::PageMap;
 
 static VMM: Mutex<Option<VirtMemoryManager>> = Mutex::new(None);
 

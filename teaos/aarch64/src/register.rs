@@ -144,6 +144,13 @@ system_register!(TCR_EL1,
     AS[36:36],
     TBI0[37:37],
     TBI1[38:38],
+    HA[39:39],
+    HD[40:40],
+);
+
+system_register!(TTBR0_EL1,
+    BADDR[1:47],
+    ASID[48:63],
 );
 
 system_register!(TTBR1_EL1,

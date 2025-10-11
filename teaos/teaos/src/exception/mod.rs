@@ -1,5 +1,7 @@
 //! Exception handling support.
 
+mod syscall;
+
 use core::arch::global_asm;
 
 use aarch64::instruction::isb;
@@ -59,7 +61,7 @@ pub extern "C" fn handle_unhandled(stack: &mut ExceptionStack) {
     let far = FAR_EL1::read();
 
     panic!(
-        "unhandled exception from EL1\n\
+        "unhandled exception\n\
          ESR = {esr:#?}\n\
          FAR = {far:#?}\n\
          stack = {stack:#018x?}"
@@ -72,11 +74,38 @@ pub extern "C" fn handle_exception_el1(stack: &mut ExceptionStack) {
 
     match esr.EC() {
         0x3c => breakpoint(stack),
-        _ => handle_unhandled(stack),
+        ec => {
+            log!("unhandled exception from EL1 (EC={ec})");
+            handle_unhandled(stack);
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn handle_exception_el0(stack: &mut ExceptionStack) {
+    let esr = ESR_EL1::read();
+
+    match esr.EC() {
+        0x15 => svc(stack),
+        0x3c => breakpoint(stack),
+        ec => {
+            log!("unhandled exception from EL0 (EC={ec})");
+            handle_unhandled(stack);
+        }
     }
 }
 
 fn breakpoint(stack: &mut ExceptionStack) {
     log!("skipping breakpoint");
     stack.elr += 4;
+}
+
+fn svc(stack: &ExceptionStack) {
+    let esr = ESR_EL1::read();
+    let syscall_nr = esr.ISS() & 0xffff;
+
+    match syscall_nr {
+        0 => syscall::print(stack),
+        _ => panic!("invalid syscall nr: {syscall_nr}"),
+    }
 }

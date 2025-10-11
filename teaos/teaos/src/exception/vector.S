@@ -54,7 +54,7 @@ exception_vectors:
     vector unhandled       // FIQ EL1 with SP_ELx
     vector unhandled       // SError EL1 with SP_ELx
 
-    vector unhandled       // Synchronous 64-bit EL0
+    vector exception_el0   // Synchronous 64-bit EL0
     vector unhandled       // IRQ 64-bit EL0
     vector unhandled       // FIQ 64-bit EL0
     vector unhandled       // SError 64-bit EL0

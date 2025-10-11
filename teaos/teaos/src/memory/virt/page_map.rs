@@ -8,7 +8,7 @@ use super::PageNr;
 use super::page_table::{PageDesc, PageTable, PageTableRef};
 
 /// A virtual memory page map.
-pub(super) struct PageMap {
+pub struct PageMap {
     level0: PageTable<0>,
     mair_idx: MairIndexes,
 }

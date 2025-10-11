@@ -1,5 +1,5 @@
 use crate::instruction::{dsb_ish, dsb_ishst, isb, tlbi_vae1is, tlbi_vmalle1is};
-use crate::register::{MAIR_EL1, TCR_EL1, TTBR1_EL1};
+use crate::register::{MAIR_EL1, TCR_EL1, TTBR0_EL1, TTBR1_EL1};
 
 use super::{PA, PAGE_SIZE, VA};
 
@@ -112,7 +112,7 @@ impl MairIndexes {
 ///
 /// The caller must ensure no concurrent writers to the relevant system registers exist, and all
 /// existing mappings still required by existing threads are also present in the new mappings.
-pub unsafe fn load_ttbr1(ttb: PA) {
+pub unsafe fn load_ttbr1(baddr: PA) {
     let mut tcr = TCR_EL1::read();
     tcr.set_T1SZ(16);
     tcr.set_EPD1(0);
@@ -121,24 +121,53 @@ pub unsafe fn load_ttbr1(ttb: PA) {
     tcr.set_SH1(0b11); // (inner shareable)
     tcr.set_TG1(0b10); // (4 KiB)
 
+    let mut ttbr1 = TTBR1_EL1::default();
+    ttbr1.set_BADDR(u64::from(baddr) >> 1);
+
     // Make previous translation table writes visible.
     dsb_ishst();
 
     unsafe {
-        TTBR1_EL1::write(ttb);
+        TTBR1_EL1::write(ttbr1);
         TCR_EL1::write(tcr);
     }
 
     // Make sure all subsequent instructions use the new translation tables.
     isb();
+}
 
-    // Invalidate all EL1 TLB entries.
-    tlbi_vmalle1is();
+/// Load a page map into TTBR0.
+///
+/// # Safety
+///
+/// The caller must ensure no concurrent writers to the relevant system registers exist, and all
+/// existing mappings still required by existing threads are also present in the new mappings.
+pub unsafe fn load_ttbr0(baddr: PA, asid: u8) {
+    let mut tcr = TCR_EL1::read();
+    tcr.set_T0SZ(16);
+    tcr.set_EPD0(0);
+    tcr.set_IRGN0(0b01); // (normal memory, WBWA cacheable)
+    tcr.set_ORGN0(0b01); // (normal memory, WBWA cacheable)
+    tcr.set_SH0(0b11); // (inner shareable)
+    tcr.set_TG0(0b00); // (4 KiB)
+    tcr.set_A1(0b0);
 
-    // Wait for TLBI to complete and refetch.
-    dsb_ish();
+    let mut ttbr0 = TTBR0_EL1::default();
+    ttbr0.set_BADDR(u64::from(baddr) >> 1);
+    ttbr0.set_ASID(asid.into());
+
+    // Make previous translation table writes visible.
+    dsb_ishst();
+
+    unsafe {
+        TTBR0_EL1::write(ttbr0);
+        TCR_EL1::write(tcr);
+    }
+
+    // Make sure all subsequent instructions use the new translation tables.
     isb();
 }
+
 
 /// Disable address translation using TTBR0.
 ///

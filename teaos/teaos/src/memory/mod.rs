@@ -1,17 +1,17 @@
 //! Memory management support.
 
 pub mod mmio;
+pub mod phys;
+pub mod virt;
 
 mod heap;
-mod phys;
-mod virt;
 
 use crate::log;
 
 use aarch64::memory::paging::disable_ttbr0;
 use boot_info::MemoryType;
 
-pub use self::virt::{KSTACK_END, pa_to_va};
+pub use self::virt::pa_to_va;
 
 /// Initialize the memory subsystem.
 ///
