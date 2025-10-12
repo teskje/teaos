@@ -1130,6 +1130,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kernel"
+version = "0.1.0"
+dependencies = [
+ "aarch64",
+ "acpi",
+ "boot-info",
+ "kstd",
+]
+
+[[package]]
 name = "kstd"
 version = "0.1.0"
 
@@ -1530,16 +1540,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "teaos"
-version = "0.1.0"
-dependencies = [
- "aarch64",
- "acpi",
- "boot-info",
- "kstd",
 ]
 
 [[package]]

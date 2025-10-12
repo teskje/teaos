@@ -6,8 +6,8 @@ members = [
     "teaos/boot-info",
     "teaos/crc",
     "teaos/elf",
+    "teaos/kernel",
     "teaos/kstd",
-    "teaos/teaos",
     "xtask",
 ]
 resolver = "3"

@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
 fn task_qemu(release: bool, gdb: bool) -> anyhow::Result<()> {
     println!("building boot.efi (release={release})");
     let boot_bin = build_boot(release)?;
-    println!("building teaos (release={release})");
+    println!("building kernel (release={release})");
     let kernel_bin = build_kernel(release)?;
 
     println!("creating disk image");
@@ -100,7 +100,7 @@ fn task_qemu(release: bool, gdb: bool) -> anyhow::Result<()> {
 async fn task_aws(release: bool) -> anyhow::Result<()> {
     println!("building boot.efi (release={release})");
     let boot_bin = build_boot(release)?;
-    println!("building teaos (release={release})");
+    println!("building kernel (release={release})");
     let kernel_bin = build_kernel(release)?;
 
     println!("creating disk image");
@@ -226,7 +226,7 @@ fn build_kernel(release: bool) -> anyhow::Result<PathBuf> {
     const TARGET: &str = "aarch64-unknown-none-softfloat";
 
     let mut cmd = Command::new("cargo");
-    cmd.args(["build", "--bin", "teaos", "--target", TARGET]);
+    cmd.args(["build", "--bin", "kernel", "--target", TARGET]);
 
     if release {
         cmd.arg("--release");
@@ -239,7 +239,7 @@ fn build_kernel(release: bool) -> anyhow::Result<PathBuf> {
 
     let profile = if release { "release" } else { "debug" };
     let mut bin_path = target_dir();
-    bin_path.extend([TARGET, profile, "teaos"]);
+    bin_path.extend([TARGET, profile, "kernel"]);
 
     Ok(bin_path)
 }

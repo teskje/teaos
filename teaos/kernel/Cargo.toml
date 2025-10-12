@@ -1,10 +1,10 @@
 [package]
-name = "teaos"
+name = "kernel"
 version = "0.1.0"
 edition.workspace = true
 
 [[bin]]
-name = "teaos"
+name = "kernel"
 test = false
 harness = false
 
