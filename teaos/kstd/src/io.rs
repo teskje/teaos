@@ -24,4 +24,5 @@ pub trait Seek {
 #[derive(Debug)]
 pub enum Error {
     UnexpectedEof,
+    SeekOutOfBounds,
 }

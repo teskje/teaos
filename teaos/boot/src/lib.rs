@@ -105,7 +105,7 @@ fn load_kernel() -> Kernel {
     let mut elf = ElfFile::open(kernel_file);
 
     let entry = elf.entry();
-    let entry = unsafe { mem::transmute::<usize, fn(boot_info::ffi::BootInfo) -> !>(entry) };
+    let entry = unsafe { mem::transmute::<u64, fn(boot_info::ffi::BootInfo) -> !>(entry) };
 
     let mut pager = KernelPager::new();
     let phdrs: Vec<_> = elf.program_headers().collect();

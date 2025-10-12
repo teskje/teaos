@@ -19,6 +19,7 @@ pub const KSTACK_SIZE: usize = 16 << 10;
 pub const KHEAP_START: VA = VA::new(0xffff000200000000);
 pub const KHEAP_SIZE: usize = 4 << 30;
 pub const USERIMG_START: VA = VA::new(0xffff000300000000);
+pub const USERIMG_SIZE: usize = 4 << 30;
 pub const PHYSMAP_START: VA = VA::new(0xffff100000000000);
 
 global_asm!(

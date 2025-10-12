@@ -11,6 +11,7 @@ mod memory;
 mod pci;
 mod process;
 mod uart;
+mod userimg;
 
 use core::arch::naked_asm;
 

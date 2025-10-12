@@ -26,8 +26,8 @@ impl<R: Read + Seek> ElfFile<R> {
         Self { reader, header }
     }
 
-    pub fn entry(&self) -> usize {
-        self.header.entry as usize
+    pub fn entry(&self) -> u64 {
+        self.header.entry
     }
 
     pub fn program_headers(&mut self) -> impl Iterator<Item = Phdr> + '_ {

@@ -1136,6 +1136,7 @@ dependencies = [
  "aarch64",
  "acpi",
  "boot-info",
+ "elf",
  "kstd",
 ]
 
