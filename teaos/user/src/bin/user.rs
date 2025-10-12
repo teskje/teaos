@@ -5,7 +5,13 @@ use core::panic::PanicInfo;
 
 #[unsafe(no_mangle)]
 pub fn _start() -> ! {
-    loop {}
+    loop {
+        foo(5);
+    }
+}
+
+fn foo(count: u32) {
+    for _ in 0..count {}
 }
 
 #[panic_handler]

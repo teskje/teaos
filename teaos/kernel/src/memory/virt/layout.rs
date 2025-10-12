@@ -13,14 +13,14 @@ use core::ffi::c_void;
 
 use aarch64::memory::VA;
 
-pub const KERNEL_START: VA = VA::new(0xffff000000000000);
-pub const KSTACK_START: VA = VA::new(0xffff000100000000);
+pub const KERNEL_START: VA = VA::new(0xffff_0000_0000_0000);
+pub const KSTACK_START: VA = VA::new(0xffff_0001_0000_0000);
 pub const KSTACK_SIZE: usize = 16 << 10;
-pub const KHEAP_START: VA = VA::new(0xffff000200000000);
+pub const KHEAP_START: VA = VA::new(0xffff_0002_0000_0000);
 pub const KHEAP_SIZE: usize = 4 << 30;
-pub const USERIMG_START: VA = VA::new(0xffff000300000000);
+pub const USERIMG_START: VA = VA::new(0xffff_0003_0000_0000);
 pub const USERIMG_SIZE: usize = 4 << 30;
-pub const PHYSMAP_START: VA = VA::new(0xffff100000000000);
+pub const PHYSMAP_START: VA = VA::new(0xffff_1000_0000_0000);
 
 global_asm!(
     r#"

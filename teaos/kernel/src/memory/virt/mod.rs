@@ -4,7 +4,7 @@ mod layout;
 mod page_map;
 mod page_table;
 
-use core::ops::{Add, AddAssign};
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 use aarch64::instruction::{dsb_ishst, isb};
 use aarch64::memory::paging::{Flags, load_ttbr1};
@@ -47,6 +47,20 @@ impl Add<u64> for PageNr {
 impl AddAssign<u64> for PageNr {
     fn add_assign(&mut self, rhs: u64) {
         self.0 += rhs;
+    }
+}
+
+impl Sub<u64> for PageNr {
+    type Output = Self;
+
+    fn sub(self, rhs: u64) -> Self::Output {
+        Self(self.0 - rhs)
+    }
+}
+
+impl SubAssign<u64> for PageNr {
+    fn sub_assign(&mut self, rhs: u64) {
+        self.0 -= rhs;
     }
 }
 

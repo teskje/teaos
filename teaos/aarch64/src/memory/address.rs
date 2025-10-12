@@ -1,5 +1,5 @@
 use core::fmt::{self, LowerHex};
-use core::ops::{Add, AddAssign};
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 use super::PAGE_SIZE;
 
@@ -172,5 +172,33 @@ impl AddAssign<u64> for VA {
 impl AddAssign<usize> for VA {
     fn add_assign(&mut self, rhs: usize) {
         *self = *self + rhs;
+    }
+}
+
+impl Sub<u64> for VA {
+    type Output = Self;
+
+    fn sub(self, rhs: u64) -> Self {
+        Self(self.0 - rhs)
+    }
+}
+
+impl Sub<usize> for VA {
+    type Output = Self;
+
+    fn sub(self, rhs: usize) -> Self {
+        self - rhs as u64
+    }
+}
+
+impl SubAssign<u64> for VA {
+    fn sub_assign(&mut self, rhs: u64) {
+        *self = *self - rhs;
+    }
+}
+
+impl SubAssign<usize> for VA {
+    fn sub_assign(&mut self, rhs: usize) {
+        *self = *self - rhs;
     }
 }

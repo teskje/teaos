@@ -1,6 +1,7 @@
 use alloc::vec;
 use alloc::vec::Vec;
 use core::arch::asm;
+use kstd::io;
 
 use aarch64::memory::paging::{AccessPermissions, Flags, load_ttbr0};
 use aarch64::memory::{PAGE_SIZE, VA};
@@ -10,22 +11,28 @@ use crate::memory::phys;
 use crate::memory::virt::{PageMap, PageNr};
 use crate::userimg;
 
+const STACK_TOP: VA = VA::new(0x0001_0000_0000_0000);
+
 struct Process {
-    pc: u64,
     page_map: PageMap,
 }
 
 impl Process {
     fn new() -> Self {
         Self {
-            pc: 0,
             page_map: PageMap::new(),
         }
     }
 }
 
 pub fn run() -> ! {
-    let proc = load_usermode();
+    let mut proc = Process::new();
+
+    let userimg = userimg::Reader::new();
+    let mut elf = ElfFile::open(userimg);
+
+    load_address_space(&mut proc.page_map, &mut elf);
+    alloc_stack(&mut proc.page_map);
 
     unsafe {
         load_ttbr0(proc.page_map.base(), 0);
@@ -33,25 +40,23 @@ pub fn run() -> ! {
         asm!(
             r#"
             msr spsr_el1, {spsr:x}
-            msr elr_el1, {pc}
+            msr elr_el1, {entry}
+            msr sp_el0, {sp}
             eret
             "#,
             spsr = in(reg) 0,
-            pc = in(reg) proc.pc,
+            entry = in(reg) elf.entry(),
+            sp = in(reg) STACK_TOP.into_u64(),
         );
     }
 
     unreachable!();
 }
 
-fn load_usermode() -> Process {
-    let mut proc = Process::new();
-
-    let reader = userimg::Reader::new();
-    let mut elf = ElfFile::open(reader);
-
-    proc.pc = elf.entry();
-
+fn load_address_space<R>(page_map: &mut PageMap, elf: &mut ElfFile<R>)
+where
+    R: io::Read + io::Seek,
+{
     let phdrs: Vec<_> = elf.program_headers().collect();
     for phdr in phdrs {
         if !phdr.is_load() {
@@ -79,7 +84,7 @@ fn load_usermode() -> Process {
         for page in &mut pages {
             let mut frame = phys::alloc();
             frame.with_contents(|buf| buf.copy_from_slice(page));
-            proc.page_map.map_ram_page(vpn, frame, flags);
+            page_map.map_ram_page(vpn, frame, flags);
             vpn += 1;
         }
 
@@ -87,8 +92,23 @@ fn load_usermode() -> Process {
         let len = rest.len();
         let mut frame = phys::alloc_zero();
         frame.with_contents(|buf| buf[..len].copy_from_slice(rest));
-        proc.page_map.map_ram_page(vpn, frame, flags);
+        page_map.map_ram_page(vpn, frame, flags);
     }
+}
 
-    proc
+fn alloc_stack(page_map: &mut PageMap) {
+    let size = 16 << 10;
+    let pages = size / PAGE_SIZE;
+
+    let flags = Flags::default()
+        .access_permissions(AccessPermissions::UnprivRW)
+        .privileged_execute_never(true)
+        .unprivileged_execute_never(true);
+
+    let mut vpn = PageNr::from_va(STACK_TOP);
+    for _ in 0..pages {
+        vpn -= 1;
+        let frame = phys::alloc_zero();
+        page_map.map_ram_page(vpn, frame, flags);
+    }
 }
