@@ -3,15 +3,12 @@
 
 use core::panic::PanicInfo;
 
+use user::sys_print;
+
 #[unsafe(no_mangle)]
 pub fn _start() -> ! {
-    loop {
-        foo(5);
-    }
-}
-
-fn foo(count: u32) {
-    for _ in 0..count {}
+    sys_print("hello from user mode");
+    loop {}
 }
 
 #[panic_handler]
