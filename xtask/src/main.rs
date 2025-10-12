@@ -5,7 +5,7 @@ use std::process::Command;
 use std::time::Duration;
 use std::{env, io};
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use aws_sdk_ebs::primitives::ByteStream;
 use aws_sdk_ebs::types::ChecksumAlgorithm;
 use aws_sdk_ec2::client::Waiters;
@@ -18,7 +18,7 @@ use base64::prelude::*;
 use fatfs::{FileSystem, FormatVolumeOptions, FsOptions};
 use fscommon::{BufStream, StreamSlice};
 use gpt::mbr::ProtectiveMBR;
-use gpt::{partition_types, GptConfig};
+use gpt::{GptConfig, partition_types};
 use sha2::{Digest, Sha256};
 
 /// xtask runner for the TeaOS repo.
@@ -70,14 +70,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn task_qemu(release: bool, gdb: bool) -> anyhow::Result<()> {
-    println!("building boot.efi (release={release})");
-    let boot_bin = build_boot(release)?;
-    println!("building kernel (release={release})");
-    let kernel_bin = build_kernel(release)?;
-
-    println!("creating disk image");
-    let esp_img = target_dir().join("esp.img");
-    create_esp_image(&esp_img, &boot_bin, &kernel_bin)?;
+    let disk_img = build_disk_image(release)?;
 
     let mut cmd = Command::new("qemu-system-aarch64");
     cmd.args(["-machine", "virt"])
@@ -87,10 +80,11 @@ fn task_qemu(release: bool, gdb: bool) -> anyhow::Result<()> {
             "-drive",
             "if=pflash,format=raw,readonly=on,file=/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
         ])
-        .args(["-drive", &format!("format=raw,file={}", esp_img.display())])
+        .args(["-drive", &format!("format=raw,file={}", disk_img.display())])
         .arg("-nographic");
     if gdb {
         cmd.args(["-s", "-S"]);
+        println!("qemu waits for gdb; connect with `target remote localhost:1234`");
     }
     cmd.status().context("qemu-system-aarch64")?;
 
@@ -98,22 +92,14 @@ fn task_qemu(release: bool, gdb: bool) -> anyhow::Result<()> {
 }
 
 async fn task_aws(release: bool) -> anyhow::Result<()> {
-    println!("building boot.efi (release={release})");
-    let boot_bin = build_boot(release)?;
-    println!("building kernel (release={release})");
-    let kernel_bin = build_kernel(release)?;
-
-    println!("creating disk image");
-    let esp_img_name = "esp.img";
-    let esp_img = target_dir().join(esp_img_name);
-    create_esp_image(&esp_img, &boot_bin, &kernel_bin)?;
+    let disk_img = build_disk_image(release)?;
 
     let aws_config = aws_config::load_from_env().await;
     let ec2 = aws_sdk_ec2::Client::new(&aws_config);
     let ebs = aws_sdk_ebs::Client::new(&aws_config);
 
     println!("creating EBS snapshot");
-    let snapshot_id = create_ebs_snapshot(&ebs, &esp_img).await?;
+    let snapshot_id = create_ebs_snapshot(&ebs, &disk_img).await?;
 
     println!("waiting for snapshot to complete (snapshot_id={snapshot_id})");
     ec2.wait_until_snapshot_completed()
@@ -200,6 +186,21 @@ fn target_dir() -> PathBuf {
     PathBuf::from("target")
 }
 
+fn build_disk_image(release: bool) -> anyhow::Result<PathBuf> {
+    println!("building boot.efi (release={release})");
+    let boot_bin = build_boot(release)?;
+    println!("building kernel (release={release})");
+    let kernel_bin = build_kernel(release)?;
+    println!("building userimg (release={release}");
+    let userimg_bin = build_userimg(release)?;
+
+    println!("creating disk image");
+    let esp_img = target_dir().join("esp.img");
+    create_esp_image(&esp_img, &boot_bin, &kernel_bin, &userimg_bin)?;
+
+    Ok(esp_img)
+}
+
 fn build_boot(release: bool) -> anyhow::Result<PathBuf> {
     const TARGET: &str = "aarch64-unknown-uefi";
 
@@ -244,7 +245,34 @@ fn build_kernel(release: bool) -> anyhow::Result<PathBuf> {
     Ok(bin_path)
 }
 
-fn create_esp_image(img_path: &Path, boot_bin: &Path, kernel_bin: &Path) -> anyhow::Result<()> {
+fn build_userimg(release: bool) -> anyhow::Result<PathBuf> {
+    const TARGET: &str = "aarch64-unknown-none-softfloat";
+
+    let mut cmd = Command::new("cargo");
+    cmd.args(["build", "--bin", "user", "--target", TARGET]);
+
+    if release {
+        cmd.arg("--release");
+    }
+
+    let status = cmd.status().context("cargo build")?;
+    if !status.success() {
+        bail!("user build failed");
+    }
+
+    let profile = if release { "release" } else { "debug" };
+    let mut bin_path = target_dir();
+    bin_path.extend([TARGET, profile, "user"]);
+
+    Ok(bin_path)
+}
+
+fn create_esp_image(
+    img_path: &Path,
+    boot_bin: &Path,
+    kernel_bin: &Path,
+    userimg_bin: &Path,
+) -> anyhow::Result<()> {
     const MB: u64 = 1024 * 1024;
     const DISK_SIZE: u64 = 100 * MB;
     const PART_SIZE: u64 = 99 * MB;
@@ -293,6 +321,10 @@ fn create_esp_image(img_path: &Path, boot_bin: &Path, kernel_bin: &Path) -> anyh
 
     let mut src = File::open(kernel_bin)?;
     let mut dst = root.create_file("kernel")?;
+    io::copy(&mut src, &mut dst)?;
+
+    let mut src = File::open(userimg_bin)?;
+    let mut dst = root.create_file("userimg")?;
     io::copy(&mut src, &mut dst)?;
 
     Ok(())

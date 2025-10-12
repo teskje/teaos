@@ -1,8 +1,9 @@
 //! The TeaOS boot loader.
 //!
 //! The boot loader is really just a thin shim between UEFI and the TeaOS kernel. It presents as a
-//! UEFI application that loads the kernel from the boot disk, collects information about the
-//! system required for the kernel to boot, then exits boot services and jumps into the kernel.
+//! UEFI application that loads the kernel and userimg from the boot disk, collects information
+//! about the system required for the kernel to boot, then exits boot services and jumps into the
+//! kernel.
 
 #![cfg_attr(not(test), no_std)]
 
@@ -22,6 +23,7 @@ use boot_info::{BootInfo, MemoryType};
 use core::ffi::c_void;
 use core::mem;
 use elf::ElfFile;
+use kstd::io::Read;
 
 use crate::paging::KernelPager;
 
@@ -36,15 +38,19 @@ pub unsafe fn init_uefi(image_handle: *mut c_void, system_table: *mut c_void) {
 
 /// Run the boot loader.
 ///
-/// This loads the kernel binary, retrieves all required boot information, and finally passes
-/// control to the kernel.
+/// This loads the kernel binary and userimg, retrieves all required boot information, and finally
+/// passes control to the kernel.
 pub fn load() -> ! {
     log!("entered UEFI boot loader");
 
     log!("loading kernel binary");
     let mut kernel = load_kernel();
     log!("  kernel.entry={:#?}", kernel.entry);
+    log!("  kernel.userimg_start={:?}", kernel.userimg_start);
     log!("  kernel.physmap_start={:?}", kernel.physmap_start);
+
+    log!("loading userimg");
+    load_userimg(&mut kernel.pager, kernel.userimg_start);
 
     log!("retrieving ACPI RSDP pointer");
     let rsdp = find_acpi_rsdp();
@@ -79,6 +85,7 @@ pub fn load() -> ! {
 struct Kernel {
     entry: fn(boot_info::ffi::BootInfo) -> !,
     pager: KernelPager,
+    userimg_start: VA,
     physmap_start: VA,
 }
 
@@ -128,24 +135,52 @@ fn load_kernel() -> Kernel {
         log!("  mapped {va:#} -> {pa:#} ({count} pages)");
     }
 
+    let mut userimg_start = None;
     let mut physmap_start = None;
     if let Some(strtab) = elf.symbol_strtab() {
         for sym in elf.symbols().unwrap() {
-            if sym.name(&strtab) == c"physmap_start" {
+            let name = sym.name(&strtab);
+            if name == c"userimg_start" {
+                userimg_start = Some(VA::new(sym.value()));
+            } else if name == c"physmap_start" {
                 physmap_start = Some(VA::new(sym.value()));
-                break;
             }
         }
     }
 
+    let userimg_start =
+        userimg_start.unwrap_or_else(|| panic!("missing `userimg_start` kernel symbol"));
     let physmap_start =
         physmap_start.unwrap_or_else(|| panic!("missing `physmap_start` kernel symbol"));
 
     Kernel {
         entry,
         pager,
+        userimg_start,
         physmap_start,
     }
+}
+
+/// Load the userimg binary.
+///
+/// The userimg binary is expected to be located in the boot file system at `\userimg`, and is
+/// expected to be an ELF file. It is mapped verbatim into the given `pager` at `userimg_start`.
+fn load_userimg(pager: &mut KernelPager, userimg_start: VA) {
+    let boot_fs = uefi::get_boot_fs();
+    let root = boot_fs.open_volume();
+    let mut userimg_file = root.open("\\userimg");
+
+    let size = userimg_file.get_size() as usize;
+    let buffer = uefi::allocate_page_memory(size, KERNEL_MEMORY);
+    userimg_file.read_exact(&mut buffer[..size]).unwrap();
+
+    let pa = PA::new(buffer.as_ptr() as u64);
+    let pages = buffer.len() / PAGE_SIZE;
+    let flags = Flags::default()
+        .access_permissions(AccessPermissions::PrivRO)
+        .privileged_execute_never(true);
+    pager.map_ram_region(userimg_start, pa, pages, flags);
+    log!("  mapped {userimg_start:#} -> {pa:#} ({pages} pages)");
 }
 
 fn create_physmap(pager: &mut KernelPager, physmap_start: VA, uart_base: PA) {

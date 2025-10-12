@@ -199,6 +199,25 @@ pub type HANDLE_PROTOCOL = extern "efiapi" fn(
 
 pub type EXIT_BOOT_SERVICES = extern "efiapi" fn(image_handle: HANDLE, map_key: usize) -> STATUS;
 
+// 8.3 Time Services
+// -----------------
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct TIME {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+    pub hour: u8,
+    pub minute: u8,
+    pub second: u8,
+    pub pad1: u8,
+    pub nanosecond: u32,
+    pub time_zone: i16,
+    pub daylight: u8,
+    pub pad2: u8,
+}
+
 // 9.1 EFI Loaded Image Protocol
 // -----------------------------
 
@@ -284,7 +303,7 @@ pub struct FILE_PROTOCOL {
     pub write: *mut c_void,
     pub get_position: FILE_GET_POSITION,
     pub set_position: FILE_SET_POSITION,
-    pub get_info: *mut c_void,
+    pub get_info: FILE_GET_INFO,
     pub set_info: *mut c_void,
     pub flush: *mut c_void,
 }
@@ -311,6 +330,30 @@ pub type FILE_GET_POSITION =
     extern "efiapi" fn(this: *mut FILE_PROTOCOL, position: *mut u64) -> STATUS;
 
 pub type FILE_SET_POSITION = extern "efiapi" fn(this: *mut FILE_PROTOCOL, position: u64) -> STATUS;
+
+pub type FILE_GET_INFO = extern "efiapi" fn(
+    this: *mut FILE_PROTOCOL,
+    information_type: *const GUID,
+    buffer_size: *mut usize,
+    buffer: *mut c_void,
+) -> STATUS;
+
+pub const FILE_INFO_ID: GUID = [
+    0x92, 0x6e, 0x57, 0x09, 0x3f, 0x6d, 0xd2, 0x11, 0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b,
+];
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct FILE_INFO {
+    pub size: u64,
+    pub file_size: u64,
+    pub physical_size: u64,
+    pub create_time: TIME,
+    pub last_access_time: TIME,
+    pub modification_time: TIME,
+    pub attribute: u64,
+    pub file_name: [u16; 0],
+}
 
 // Appendix D
 

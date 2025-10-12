@@ -1,3 +1,4 @@
+use alloc::vec;
 use core::{fmt, ptr};
 
 use kstd::io::{self, Read, Seek};
@@ -126,6 +127,25 @@ impl File {
         assert_eq!(status, sys::SUCCESS);
 
         unsafe { Self::new(new_handle) }
+    }
+
+    pub fn get_size(&self) -> u64 {
+        let get_info = unsafe { (**self.ptr).get_info };
+
+        // The size of the `FILE_INFO` struct depends on the length of the file name. We
+        // optimistically assume that file name is reasonably short.
+        let mut buf_size = 1024;
+        let mut buf = vec![0; buf_size];
+        let status = get_info(
+            *self.ptr,
+            &sys::FILE_INFO_ID,
+            &mut buf_size,
+            buf.as_mut_ptr().cast(),
+        );
+        assert_eq!(status, sys::SUCCESS);
+
+        let file_info: *const sys::FILE_INFO = buf.as_ptr().cast();
+        unsafe { (*file_info).file_size }
     }
 }
 

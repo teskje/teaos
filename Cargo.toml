@@ -8,6 +8,7 @@ members = [
     "teaos/elf",
     "teaos/kernel",
     "teaos/kstd",
+    "teaos/user",
     "xtask",
 ]
 resolver = "3"
