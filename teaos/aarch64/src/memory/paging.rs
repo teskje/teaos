@@ -184,12 +184,7 @@ pub unsafe fn disable_ttbr0() {
     // Make sure all subsequent instructions observe the change.
     isb();
 
-    // Invalidate all EL1 TLB entries.
-    tlbi_vmalle1is();
-
-    // Wait for TLBI to complete and refetch.
-    dsb_ish();
-    isb();
+    tlb_invalidate_all();
 }
 
 pub fn tlb_invalidate(mut va: VA, size: usize) {
@@ -207,6 +202,18 @@ pub fn tlb_invalidate(mut va: VA, size: usize) {
     }
 
     // Wait for TLBIs to complete and refetch.
+    dsb_ish();
+    isb();
+}
+
+pub fn tlb_invalidate_all() {
+    // Make previous translation table writes visible.
+    dsb_ishst();
+
+    // Invalidate all EL1 TLB entries.
+    tlbi_vmalle1is();
+
+    // Wait for TLBI to complete and refetch.
     dsb_ish();
     isb();
 }

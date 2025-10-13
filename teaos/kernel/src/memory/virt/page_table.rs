@@ -4,6 +4,7 @@ use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::ops::{Deref, DerefMut};
 
+use aarch64::instruction::{dsb_ishst, isb};
 use aarch64::memory::paging::Flags;
 use aarch64::memory::{PA, PAGE_SIZE};
 
@@ -25,6 +26,11 @@ impl<const L: u64> PageTable<L> {
         let frame = phys::alloc_zero();
         frame.inc_map();
 
+        // We must publish the zeroing before we insert the page table into an active page map.
+        // Otherwise page table walks might get confused reading whatever garbage was there before.
+        dsb_ishst();
+        isb();
+
         Self { base: frame.pa() }
     }
 
@@ -45,7 +51,7 @@ macro_rules! pt_table_level {
                 I: PageTableIndex<$level>,
             {
                 let ptr = pa_to_va(self.base).as_mut_ptr::<TableDesc>();
-                let desc = unsafe { ptr.add(idx.index()).read() };
+                let desc = unsafe { ptr.add(idx.index()).read_volatile() };
                 desc.valid().then_some(desc)
             }
 
@@ -71,7 +77,7 @@ macro_rules! pt_table_level {
             {
                 let pt = ManuallyDrop::new(pt);
                 let ptr = pa_to_va(self.base).as_mut_ptr::<TableDesc>();
-                unsafe { ptr.add(idx.index()).write(pt.desc()) };
+                unsafe { ptr.add(idx.index()).write_volatile(pt.desc()) };
             }
 
             pub fn get_or_insert<I>(&mut self, idx: I) -> PageTableMut<'_, $next>
@@ -108,7 +114,7 @@ impl PageTable<3> {
         I: PageTableIndex<3>,
     {
         let ptr = pa_to_va(self.base).as_mut_ptr::<PageDesc>();
-        let desc = unsafe { ptr.add(idx.index()).read() };
+        let desc = unsafe { ptr.add(idx.index()).read_volatile() };
         desc.valid().then_some(desc)
     }
 
@@ -117,7 +123,7 @@ impl PageTable<3> {
         I: PageTableIndex<3>,
     {
         let ptr = pa_to_va(self.base).as_mut_ptr::<PageDesc>();
-        unsafe { ptr.add(idx.index()).write(desc) }
+        unsafe { ptr.add(idx.index()).write_volatile(desc) };
     }
 
     pub fn walk(&self, vpn: PageNr, mut f: impl FnMut(PageNr, PageDesc)) {
@@ -136,7 +142,7 @@ impl<const L: u64> Drop for PageTable<L> {
         fn drop_children<const L: u64>(base: PA) {
             let ptr = pa_to_va(base).as_mut_ptr::<TableDesc>();
             for idx in 0..PageTable::<L>::LEN {
-                let desc = unsafe { ptr.add(idx).read() };
+                let desc = unsafe { ptr.add(idx).read_volatile() };
                 if desc.valid() {
                     let child = PageTable::<L> {
                         base: desc.output_addr(),

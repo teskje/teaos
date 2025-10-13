@@ -8,7 +8,7 @@ use core::fmt;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 use aarch64::instruction::{dsb_ishst, isb};
-use aarch64::memory::paging::{Flags, load_ttbr1};
+use aarch64::memory::paging::{Flags, load_ttbr1, tlb_invalidate_all};
 use aarch64::memory::{PA, PAGE_SHIFT, VA};
 use kstd::sync::Mutex;
 
@@ -118,6 +118,10 @@ pub(super) unsafe fn init() {
 
     // SAFETY: New map contains all existing mappings.
     unsafe { load_ttbr1(kernel_map.base()) };
+
+    // We need to issue a TLBI here to ensure the page walker doesn't use stale walk cache entries
+    // that still point to the old page tables.
+    tlb_invalidate_all();
 
     *vmm = Some(VirtMemoryManager { kernel_map });
 }
