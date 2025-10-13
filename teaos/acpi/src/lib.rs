@@ -82,6 +82,7 @@ pub struct SPCR {
 
 pub const UART_TYPE_16550: u8 = 0x00;
 pub const UART_TYPE_PL011: u8 = 0x03;
+pub const UART_TYPE_16550_EXT: u8 = 0x12;
 
 #[repr(C, packed)]
 pub struct MCFG {

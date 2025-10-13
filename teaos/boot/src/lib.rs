@@ -272,7 +272,7 @@ unsafe fn find_uart(rsdp_ptr: *mut acpi::RSDP) -> boot_info::Uart {
     let base = PA::new(spcr.base_address.address);
 
     match spcr.interface_type {
-        acpi::UART_TYPE_16550 => boot_info::Uart::Uart16550 { base },
+        acpi::UART_TYPE_16550 | acpi::UART_TYPE_16550_EXT => boot_info::Uart::Uart16550 { base },
         acpi::UART_TYPE_PL011 => boot_info::Uart::Pl011 { base },
         value => unimplemented!("UART type: {value:#x}"),
     }

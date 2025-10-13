@@ -47,7 +47,8 @@ impl HeapAllocator {
     }
 
     fn grow(&mut self, size: usize) -> Result<(), ()> {
-        let new_break = self.heap_break + round_up_page(size);
+        let size = round_up_page(size);
+        let new_break = self.heap_break + size;
         let kheap_limit = KHEAP_START + KHEAP_SIZE;
 
         if new_break >= kheap_limit {

@@ -4,6 +4,7 @@ mod layout;
 mod page_map;
 mod page_table;
 
+use core::fmt;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 use aarch64::instruction::{dsb_ishst, isb};
@@ -22,7 +23,7 @@ pub use self::page_map::PageMap;
 static VMM: Mutex<Option<VirtMemoryManager>> = Mutex::new(None);
 
 /// A virtual page number.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PageNr(u64);
 
 impl PageNr {
@@ -61,6 +62,12 @@ impl Sub<u64> for PageNr {
 impl SubAssign<u64> for PageNr {
     fn sub_assign(&mut self, rhs: u64) {
         self.0 -= rhs;
+    }
+}
+
+impl fmt::Debug for PageNr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "PageNr({:#x})", self.0)
     }
 }
 

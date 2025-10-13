@@ -2,7 +2,7 @@
 
 mod alloc;
 
-use core::mem;
+use core::{fmt, mem};
 use core::num::NonZeroU8;
 use core::sync::atomic::{self, AtomicU32, Ordering};
 
@@ -15,7 +15,7 @@ use super::pa_to_va;
 static PMM: Mutex<PhysMemoryManager> = Mutex::new(PhysMemoryManager::new());
 
 /// A physical page frame number.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FrameNr(u64);
 
 impl FrameNr {
@@ -26,6 +26,12 @@ impl FrameNr {
 
     pub fn pa(&self) -> PA {
         PA::new(self.0 << PAGE_SHIFT)
+    }
+}
+
+impl fmt::Debug for FrameNr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "FrameNr({:#x})", self.0)
     }
 }
 
