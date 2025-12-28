@@ -1,14 +1,7 @@
 [workspace]
 members = [
-    "teaos/aarch64",
-    "teaos/acpi",
-    "teaos/boot",
-    "teaos/boot-info",
-    "teaos/crc",
-    "teaos/elf",
-    "teaos/kernel",
-    "teaos/kstd",
-    "teaos/user",
+    "kernel/*",
+    "user/*",
     "xtask",
 ]
 resolver = "3"
