@@ -12,6 +12,10 @@ use crate::memory::virt::{PageMap, PageNr};
 use crate::userimg;
 
 const STACK_TOP: VA = VA::new(0x0001_0000_0000_0000);
+const STACK_SIZE: usize = 16 << 10;
+
+const HEAP_START: VA = VA::new(0x0000_1000_0000_0000);
+const HEAP_SIZE: usize = 10 << 20;
 
 struct Process {
     page_map: PageMap,
@@ -33,9 +37,10 @@ pub fn run() -> ! {
 
     load_address_space(&mut proc.page_map, &mut elf);
     alloc_stack(&mut proc.page_map);
+    alloc_heap(&mut proc.page_map);
 
     unsafe {
-        load_ttbr0(proc.page_map.base(), 0);
+        load_ttbr0(proc.page_map.base(), 1);
 
         asm!(
             r#"
@@ -47,6 +52,8 @@ pub fn run() -> ! {
             spsr = in(reg) 0,
             entry = in(reg) elf.entry(),
             sp = in(reg) STACK_TOP.into_u64(),
+            in("x0") HEAP_START.into_u64(),
+            in("x1") HEAP_SIZE,
         );
     }
 
@@ -97,8 +104,7 @@ where
 }
 
 fn alloc_stack(page_map: &mut PageMap) {
-    let size = 16 << 10;
-    let pages = size / PAGE_SIZE;
+    let pages = STACK_SIZE / PAGE_SIZE;
 
     let flags = Flags::default()
         .access_permissions(AccessPermissions::UnprivRW)
@@ -110,5 +116,21 @@ fn alloc_stack(page_map: &mut PageMap) {
         vpn -= 1;
         let frame = phys::alloc_zero();
         page_map.map_ram_page(vpn, frame, flags);
+    }
+}
+
+fn alloc_heap(page_map: &mut PageMap) {
+    let pages = HEAP_SIZE / PAGE_SIZE;
+
+    let flags = Flags::default()
+        .access_permissions(AccessPermissions::UnprivRW)
+        .privileged_execute_never(true)
+        .unprivileged_execute_never(true);
+
+    let mut vpn = PageNr::from_va(HEAP_START);
+    for _ in 0..pages {
+        let frame = phys::alloc_zero();
+        page_map.map_ram_page(vpn, frame, flags);
+        vpn += 1;
     }
 }

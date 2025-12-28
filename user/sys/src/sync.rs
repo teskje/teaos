@@ -1,7 +1,7 @@
 //! Thread synchronization primitives.
 //!
-//! For now, both boot loader and kernel are single-threaded, so the "synchronization" merely
-//! consists of asserting that there is no concurrent access to the protected data.
+//! For now, userspace is single-threaded, so the "synchronization" merely consists of asserting
+//! that there is no concurrent access to the protected data.
 
 use core::cell::UnsafeCell;
 use core::ops::{Deref, DerefMut};
