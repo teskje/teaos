@@ -3,7 +3,7 @@
 
 use core::panic::PanicInfo;
 
-use user::sys_print;
+use sys::sys_print;
 
 #[unsafe(no_mangle)]
 pub fn _start() -> ! {

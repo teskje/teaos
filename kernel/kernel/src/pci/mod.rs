@@ -124,7 +124,7 @@ pub unsafe fn discover(acpi_rsdp: *const acpi::RSDP) -> Vec<Function> {
 
     let functions = unsafe { Discovery::new(acpi_rsdp).run() };
     for func in &functions {
-        log!("    {func}");
+        log!("  {func}");
     }
 
     functions

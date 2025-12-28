@@ -7,3 +7,6 @@ edition.workspace = true
 name = "user"
 test = false
 harness = false
+
+[dependencies]
+sys.path = "../sys"

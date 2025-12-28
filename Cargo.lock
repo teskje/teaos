@@ -1696,6 +1696,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sys"
+version = "0.1.0"
+
+[[package]]
 name = "time"
 version = "0.3.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1893,6 +1897,9 @@ checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 [[package]]
 name = "user"
 version = "0.1.0"
+dependencies = [
+ "sys",
+]
 
 [[package]]
 name = "utf8_iter"

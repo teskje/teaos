@@ -4,4 +4,4 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
-aarch64 = { path = "../aarch64" }
+aarch64.path = "../aarch64"
