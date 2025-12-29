@@ -759,6 +759,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "freelist"
+version = "0.1.0"
+
+[[package]]
 name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1261,6 +1265,7 @@ dependencies = [
  "acpi",
  "boot-info",
  "elf",
+ "freelist",
  "kstd",
 ]
 
@@ -1698,6 +1703,9 @@ dependencies = [
 [[package]]
 name = "sys"
 version = "0.1.0"
+dependencies = [
+ "freelist",
+]
 
 [[package]]
 name = "time"

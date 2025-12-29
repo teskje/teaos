@@ -5,11 +5,13 @@ extern crate alloc;
 
 use alloc::format;
 use core::panic::PanicInfo;
+use core::ptr::NonNull;
 
 use sys::syscall;
 
 #[unsafe(no_mangle)]
 pub fn _start(heap_start: *mut u8, heap_size: usize) -> ! {
+    let heap_start = NonNull::new(heap_start).unwrap();
     unsafe { sys::heap::init(heap_start, heap_size) };
 
     let s = format!("heap_start={heap_start:?}, heap_size={heap_size:#x}");
